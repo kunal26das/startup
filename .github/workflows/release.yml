@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, without the leading v
+        required: true
+      maven-central:
+        description: Publish to Maven Central. Turn off to republish only to GitHub Packages, which Central refuses because a released coordinate is immutable.
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Publish
+    runs-on: macos-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Resolve the version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check the tag matches the declared version
+        run: |
+          declared=$(grep -oE 'val artifactVersion = "[^"]+"' startup/build.gradle.kts | cut -d'"' -f2)
+          if [ "$declared" != "${{ steps.version.outputs.version }}" ]; then
+            echo "startup/build.gradle.kts declares $declared but the release is ${{ steps.version.outputs.version }}" >&2
+            exit 1
+          fi
+      - name: Build and test every target
+        run: >
+          ./gradlew build
+          testAndroidHostTest desktopTest macosArm64Test iosSimulatorArm64Test
+          jsNodeTest wasmJsNodeTest linkDebugTestLinuxX64 linkDebugTestMingwX64
+      - name: Publish to Maven Central
+        if: github.event_name != 'workflow_dispatch' || inputs.maven-central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: ./gradlew publishAndReleaseToMavenCentral -PsignPublications=true --no-configuration-cache
+      - name: Publish to GitHub Packages
+        env:
+          ORG_GRADLE_PROJECT_githubPackagesUsername: ${{ github.actor }}
+          ORG_GRADLE_PROJECT_githubPackagesPassword: ${{ secrets.GITHUB_TOKEN }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: ./gradlew publishAllPublicationsToGithubPackagesRepository -PsignPublications=true --no-configuration-cache
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          git rev-parse "$tag" >/dev/null 2>&1 || git tag "$tag"
+          git push origin "$tag" || true
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" \
+            --title "${{ steps.version.outputs.version }}" \
+            --generate-notes
