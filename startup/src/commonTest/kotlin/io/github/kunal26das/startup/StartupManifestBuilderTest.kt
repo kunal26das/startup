@@ -11,7 +11,6 @@ import kotlin.test.assertEquals
 class StartupManifestBuilderTest {
 
     /** Registering by a runtime key produces the very manifest the reified overloads do. */
-    @Suppress("DEPRECATION")
     @Test
     fun aRuntimeKeyRegistersTheSameEntry() {
         val reified = StartupManifest {
@@ -26,7 +25,13 @@ class StartupManifestBuilderTest {
         }
         assertEquals(reified.components, runtime.components)
         assertEquals(reified.eagerComponents, runtime.eagerComponents)
-        assertEquals(reified.androidManifestMetadata(), runtime.androidManifestMetadata())
+        val keys: List<AnyInitializerKey> = listOf(
+            initializerKey<AlphaInitializer>(),
+            initializerKey<BetaInitializer>(),
+            initializerKey<GammaInitializer>(),
+        )
+        assertEquals(keys.map(reified::isEager), keys.map(runtime::isEager))
+        assertEquals(keys.map { it in reified }, keys.map { it in runtime })
     }
 
     /** A runtime key and a reified one are one key, so a later entry still overrides. */

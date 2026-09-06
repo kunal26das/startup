@@ -44,9 +44,6 @@ class MainActivity : Activity() {
 
     private fun report(): List<String> = buildList {
         add("started by androidx.startup.InitializationProvider: ${AndroidSampleStartup.isEager(this@MainActivity)}")
-        val drift = AndroidSampleStartup.androidManifestDrift(this@MainActivity)
-        add("androidmanifest drift: ${drift.size}")
-        for (line in drift) add("  $line")
         add("")
         addAll(SampleReport.lines(this@MainActivity))
     }

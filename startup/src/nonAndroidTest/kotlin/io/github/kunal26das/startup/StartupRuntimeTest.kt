@@ -23,19 +23,21 @@ class StartupRuntimeTest {
         assertEquals(listOf("alpha", "beta", "gamma", "delta"), TestLog.created)
     }
 
-    /** The creation order is readable back as keys, not only as whatever a test logged. */
-    @Suppress("DEPRECATION")
+    /**
+     * Everything the install created it keeps: asking for any of the four afterwards hands
+     * back what was built without running a single [Initializer.create] again, which is the
+     * whole observable consequence of a component being initialized.
+     */
     @Test
-    fun recordsWhatItCreated() {
+    fun keepsEveryComponentItCreated() {
         val appInitializer = Startup.install(DefaultContext, diamond())
-        val expected: List<AnyInitializerKey> = listOf(
-            initializerKey<AlphaInitializer>(),
-            initializerKey<BetaInitializer>(),
-            initializerKey<GammaInitializer>(),
-            initializerKey<DeltaInitializer>(),
-        )
-        assertEquals(expected, appInitializer.initializationOrder())
-        assertEquals(true, appInitializer.isInitialized(initializerKey<DeltaInitializer>()))
+        val diamond = listOf("alpha", "beta", "gamma", "delta")
+        assertEquals(diamond, TestLog.created)
+        assertEquals("alpha", appInitializer.initializeComponent(initializerKey<AlphaInitializer>()))
+        assertEquals("beta", appInitializer.initializeComponent(initializerKey<BetaInitializer>()))
+        assertEquals("gamma", appInitializer.initializeComponent(initializerKey<GammaInitializer>()))
+        assertEquals("delta", appInitializer.initializeComponent(initializerKey<DeltaInitializer>()))
+        assertEquals(diamond, TestLog.created)
     }
 
     /** A lazily registered component waits until something asks for it. */
@@ -114,7 +116,6 @@ class StartupRuntimeTest {
      * components are eager and independent, so the loop really does still have the second
      * one ahead of it.
      */
-    @Suppress("DEPRECATION")
     @Test
     fun skipsAComponentCreatedFromInsideAnotherCreate() {
         val manifest = StartupManifest {
@@ -123,11 +124,8 @@ class StartupRuntimeTest {
         }
         val appInitializer = Startup.install(DefaultContext, manifest)
         assertEquals(listOf("alpha", "forwardCaller"), TestLog.created)
-        val expected: List<AnyInitializerKey> = listOf(
-            initializerKey<AlphaInitializer>(),
-            initializerKey<ForwardCallerInitializer>(),
-        )
-        assertEquals(expected, appInitializer.initializationOrder())
+        assertEquals("alpha", appInitializer.initializeComponent(initializerKey<AlphaInitializer>()))
+        assertEquals(listOf("alpha", "forwardCaller"), TestLog.created)
     }
 
     /**
@@ -174,7 +172,6 @@ class StartupRuntimeTest {
     }
 
     /** Installing a second manifest adds to the first rather than replacing it. */
-    @Suppress("DEPRECATION")
     @Test
     fun composesSuccessiveInstalls() {
         Startup.install(
@@ -187,7 +184,7 @@ class StartupRuntimeTest {
         )
         assertEquals(listOf("alpha", "beta"), TestLog.created)
         assertEquals(true, appInitializer.isEagerlyInitialized(initializerKey<AlphaInitializer>()))
-        assertEquals(true, initializerKey<BetaInitializer>() in appInitializer.manifest())
+        assertEquals(true, appInitializer.isEagerlyInitialized(initializerKey<BetaInitializer>()))
     }
 
     /**

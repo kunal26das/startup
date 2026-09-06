@@ -23,9 +23,8 @@ On the other ten targets it is a hand-written runtime whose order comes from Kah
 ```
 startup/                  the published library
   src/commonMain          the public API and StartupPlanner
-  src/androidMain         typealiases onto androidx.startup, plus the AndroidManifest parity check
+  src/androidMain         typealiases onto androidx.startup, and nothing else
   src/nonAndroidMain      the runtime for the other ten targets
-  src/appleMain           initializerKey(objCClass), deprecated in 1.1.0, gone in 2.0.0
   src/desktopMain         the JVM StartupLock
   src/nativeMain          the Kotlin/Native StartupLock and its thread token
   src/jsMain              the single-threaded StartupLock
@@ -33,7 +32,6 @@ startup/                  the published library
   src/commonTest          planner and manifest tests, run on all eleven targets
   src/nonAndroidTest      engine tests, run on the ten non-Android targets
   src/desktopTest         the concurrency test, which needs real threads
-  src/appleTest           the Objective-C class overload's rejection path
   src/androidHostTest     the Android bytecode contract, asserted reflectively
 sample/                   not published; proves a consumer writes an initializer once
   src/commonMain          shared initializers, the two expect initializers, SampleReport
@@ -98,19 +96,19 @@ AndroidX reflects with `getDeclaredConstructor().newInstance()` and ignores the 
 an `object` compiles on all eleven targets and throws only on Android.
 
 `AndroidManifestParityTest` holds `sample/src/androidMain/AndroidManifest.xml` and
-`SampleStartup.manifest` in step, through `StartupManifest.androidManifestDrift(Set<String>)`, so a
-failure names the components that drifted. The manifest is declared as an `inputs.file` on the test
-task; without that the task stays up to date when the XML changes and the assertion silently stops
-running. That call is deprecated in 1.1.0 and the test suppresses it: it is the coverage the
-declaration still needs while it ships, not the shape README.md recommends to a consumer.
+`SampleStartup.manifest` in step, and from 2.0.0 it does so with no library API at all: it reads the
+XML off disk and compares the `<meta-data>` names against
+`SampleStartup.manifest.eagerComponents.map { it.name }`, which works because on Android an
+`InitializerKey` **is** a `java.lang.Class`. It is now the exact test README.md tells a consumer to
+copy, so the two must not drift apart — change one and change the other. The manifest is declared as
+an `inputs.file` on the test task; without that the task stays up to date when the XML changes and
+the assertion silently stops running. The negative control is the point of the whole thing: delete a
+`<meta-data>` line and `:sample:testAndroidHostTest` must fail.
 
-`MainActivity` prints `AndroidSampleStartup.androidManifestDrift(context)` above the report, which
-is the only exercise of the `PackageManager` half of that check: `androidManifestDrift(Context)`
-reads the merged manifest of the running application through
-`getProviderInfo(..., GET_META_DATA)` and cannot be unit tested without an instrumented context.
-Verify it by launching `androidApp` and reading `androidmanifest drift: 0` back from Logcat. The
-wrapper in `AndroidSampleStartup` carries the `@Suppress("DEPRECATION")`, so `MainActivity` itself
-compiles clean and this stays the one place the `PackageManager` path is exercised.
+`MainActivity` prints only `AndroidSampleStartup.isEager(context)` above the report. Until 1.1.0 it
+also printed `androidManifestDrift(context)`, which was the one exercise of the `PackageManager`
+path; that declaration is gone in 2.0.0 and nothing replaced it, because the check it performed now
+belongs to the consumer's own test rather than to the library.
 
 Sample tests share one process-wide `Startup`, so they share one `Logger`. Assert relative order or
 containment, never the whole message list.
@@ -134,8 +132,11 @@ commonMain
     ├── jsMain
     ├── wasmJsMain
     └── nativeMain
-        └── appleMain
 ```
+
+`:startup` has no `appleMain`. It held only `initializerKey(objCClass)`, so removing that in 2.0.0
+emptied the source set and it was deleted; `:startup:compileAppleMainKotlinMetadata` is NO-SOURCE.
+`sample` still has one.
 
 `sample` adds one more edge on top of that, `consoleMain`, which `desktopMain`, `jsMain`,
 `wasmJsMain`, `macosMain`, `linuxMain` and `mingwMain` depend on and `iosMain` does not. A source
@@ -146,55 +147,69 @@ Declare the edges with `getByName` and `create`, never `by getting` and `by crea
 deprecated on Gradle 9.7.1. Missing even one edge produces
 `Expected <X> has no actual declaration in module <commonMain>`.
 
-## Deprecated in 1.1.0
+## Removed in 2.0.0
 
-Eight declarations carry `@Deprecated(level = DeprecationLevel.WARNING)` as of 1.1.0 and are
-**removed in 2.0.0**:
+Eight declarations carried `@Deprecated(level = DeprecationLevel.WARNING)` in 1.1.0 and are **gone
+in 2.0.0**:
 
-| declaration                                     | file                              |
-| ----------------------------------------------- | --------------------------------- |
-| `AppInitializer.isInitialized(component)`        | `nonAndroidMain/AppInitializer.kt` |
-| `AppInitializer.initializationOrder()`           | `nonAndroidMain/AppInitializer.kt` |
-| `AppInitializer.manifest()`                      | `nonAndroidMain/AppInitializer.kt` |
-| `StartupManifest.androidManifestMetadata()`      | `commonMain/StartupManifest.kt`    |
-| `StartupManifest.androidManifestDrift(Set)`      | `commonMain/StartupManifest.kt`    |
-| `StartupManifest.androidManifestDrift(Context)`  | `androidMain/AndroidManifestDrift.kt` |
-| `StartupManifest.verifyAndroidManifest(Context)` | `androidMain/VerifyAndroidManifest.kt` |
-| `initializerKey(objCClass)`                      | `appleMain/InitializerKey.kt`      |
+| removed                                          | file it lived in                       |
+| ------------------------------------------------ | -------------------------------------- |
+| `AppInitializer.isInitialized(component)`         | `nonAndroidMain/AppInitializer.kt`      |
+| `AppInitializer.initializationOrder()`            | `nonAndroidMain/AppInitializer.kt`      |
+| `AppInitializer.manifest()`                       | `nonAndroidMain/AppInitializer.kt`      |
+| `StartupManifest.androidManifestMetadata()`       | `commonMain/StartupManifest.kt`         |
+| `StartupManifest.androidManifestDrift(Set)`       | `commonMain/StartupManifest.kt`         |
+| `StartupManifest.androidManifestDrift(Context)`   | `androidMain/AndroidManifestDrift.kt`   |
+| `StartupManifest.verifyAndroidManifest(Context)`  | `androidMain/VerifyAndroidManifest.kt`  |
+| `initializerKey(objCClass)`                       | `appleMain/InitializerKey.kt`           |
 
-None of the eight has a counterpart in `androidx.startup`, and mirroring `androidx.startup` is the
-whole contract of this library. They were also the only platform asymmetry in README.md's API-mapping
-table: three exist on the ten non-Android targets and not on Android, four exist for Android's
-manifest and do nothing useful off it — two of them `androidMain` only, two of them `commonMain`
-declarations that can only name a class fully on Android — and one exists on the Apple targets alone.
-Removing them makes the API one shape on all eleven targets.
+The last three files are deleted outright, and with them the whole `appleMain` and `appleTest` source
+sets, which held nothing else. `StartupEngine` lost `isInitialized`, `initializationOrder` and
+`manifest` at the same time, because the three `AppInitializer` members were their only callers; its
+`initialized` map stays, because the execution loop still reads it.
 
-`WARNING`, never `ERROR` or `HIDDEN`, until 2.0.0. A deprecation cycle is a migration window, and a
-consumer's build has to keep compiling through it. Do not raise the level, do not delete any of the
-eight, and do not add a ninth without the same reasoning: a declaration earns its place here by
-having no `androidx.startup` counterpart, not by being unused.
+None of the eight had a counterpart in `androidx.startup`, and mirroring `androidx.startup` is the
+whole contract of this library. They were also the only platform asymmetry in README.md's
+API-mapping table: three existed on the ten non-Android targets and not on Android, four existed for
+Android's manifest and did nothing useful off it, and one existed on the Apple targets alone. The API
+is now one shape on all eleven targets.
 
-`ReplaceWith` is on none of them, because none has a mechanical replacement. `initializerKey(objCClass)`
-comes closest and still does not qualify: `initializerKey(initializer)` takes an instance, not a class
-object, so a generated call site would not compile.
+**Do not add any of them back, and do not add a ninth declaration of that kind.** A declaration earns
+its place in this library by having an `androidx.startup` counterpart to mirror, not by being useful
+on its own. The Android drift check in particular will look worth reintroducing and is not: the
+problem it addressed is real and is now the consumer's, answered by a parity test of their own, which
+is what `sample`'s `AndroidManifestParityTest` and README.md's **Keep the two Android registries in
+step** demonstrate.
 
-**The tests stay.** A declaration that ships in 1.1.0 is covered by a test in 1.1.0, so
-`AndroidManifestDriftTest`, `StartupManifestTest`, `StartupManifestBuilderTest`, `StartupRuntimeTest`,
-`AndroidInitializerContractTest`, `ObjCInitializerKeyTest` and `sample`'s `AndroidManifestParityTest`
-all still call them, each under `@Suppress("DEPRECATION")` on the enclosing test function. Delete a
-test only when the declaration it covers goes, in 2.0.0.
+**What went with them, and what did not.** `AndroidManifestDriftTest` and `ObjCInitializerKeyTest`
+tested only removed API and are deleted. `StartupManifestTest` lost its two
+`androidManifestMetadata` tests, `AndroidInitializerContractTest` its two manifest-helper tests, and
+`AndroidManifestParityTest` its generated-metadata test. One assertion inside a deleted test was
+kept: `AndroidInitializerContractTest.aKeyNamesItsClassFully` pins that on Android
+`componentName(key)` is the fully qualified name, which `androidManifestMetadataNamesClassesFully`
+used to be the only place asserting, and which is what makes an AndroidManifest parity test possible
+at all. `InitializerKeyTest.keysNameThemselves` deliberately does `substringAfterLast('.')`, so it
+cannot stand in for it. `StartupRuntimeTest`'s three introspection
+tests and `StartupManifestBuilderTest`'s one were **rewritten, not deleted**: every behaviour they
+asserted is still real, and it is observed through what the components themselves record — `TestLog`
+in `:startup`, `Logger.initialized` in `sample` — or through `isEagerlyInitialized`, `isEager`,
+`contains` and the fact that resolving an already-created component adds nothing to the log. That is
+the rule for any future removal here: an assertion is re-expressed against the surviving API or its
+loss is stated, never quietly dropped.
 
-`androidManifestDrift(Context)` and `verifyAndroidManifest(Context)` carry `@Suppress("DEPRECATION")`
-beside their own `@Deprecated`: each calls a deprecated declaration and Kotlin warns on that even
-from inside a deprecated one. `AndroidSampleStartup`'s two wrappers carry it for the same reason,
-which is what keeps `MainActivity` clean.
+**What is not removed, and must not be.** The key-taking registration overloads —
+`metaData(component, factory)`, `lazyInitializer(component, factory)`, `remove(component)`,
+`initializerKey(initializer)` and `initializerKey(kClass)`. `androidx.startup` registers by name in
+XML, so a key-taking overload is *closer* to it than a `reified` one, and without them Swift cannot
+register a host-supplied initializer at all. Everything else published in 1.1.0 is unchanged in
+2.0.0; this release removes those eight and nothing else.
 
-**What is not deprecated, and must not be.** The key-taking registration overloads —
-`metaData(component, factory)`, `lazyInitializer(component, factory)`, `remove(component)` and
-`initializerKey(initializer)`. `androidx.startup` registers by name in XML, so a key-taking overload
-is *closer* to it than a `reified` one, and without them Swift cannot register a host-supplied
-initializer at all. Everything else published in 1.0.0 is unchanged in 1.1.0; this release removes
-nothing.
+One assertion was lost outright and is not covered anywhere. `androidManifestMetadata()` emitted a
+line per node in declaration order, tombstones included, so `StartupManifestBuilderTest` could assert
+where a `remove<T>()` entry sat among the others. No surviving public accessor exposes tombstones in
+order: `components` and `eagerComponents` both exclude them. Node kind is still pinned exactly, by
+`isEager` and `contains` over a Merge, a Lazy and a Remove entry; the ordinal position of a tombstone
+is not, and cannot be without adding API that androidx.startup has no counterpart for.
 
 ## Verified shapes, and the near-misses that fail
 
@@ -239,10 +254,13 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   `implementation` the published POM emits `<scope>runtime</scope>` and a downstream Android
   consumer cannot compile `class X : Initializer<Y>`.
 - `minSdk = 21` and `aarMetadata { minCompileSdk = 34 }`, which are exactly the floors
-  `androidx.startup:startup-runtime:1.2.0` publishes. Neither may rise. The Android half of this
-  library touches `ComponentName.getClassName`, `Context.getPackageManager`, `Context.getPackageName`,
-  `PackageManager.getProviderInfo`, `ProviderInfo.metaData`, `Bundle.getString` and `Bundle.keySet`,
-  every one of them API 1, so a higher floor buys nothing and costs a consumer everything: a
+  `androidx.startup:startup-runtime:1.2.0` publishes. Neither may rise. As of 2.0.0 `androidMain`
+  calls no `android.*` method at all — it is `typealias`es plus a loop over
+  `AppInitializer.initializeComponent`. Through 1.1.0 it reached `ComponentName.getClassName`,
+  `Context.getPackageManager`, `Context.getPackageName`, `PackageManager.getProviderInfo`,
+  `ProviderInfo.metaData`, `Bundle.getString` and `Bundle.keySet`, every one of them API 1, and all
+  of them went with `androidManifestDrift(Context)`. A higher floor therefore buys nothing and costs
+  a consumer everything: a
   `minSdk` above theirs fails `processDebugMainManifest` outright, and `minCompileSdk` is worse
   still, because `checkAarMetadata` is unconditional and has no `tools:` escape hatch — a library
   that publishes the newest SDK in existence forces every consumer to move `compileSdk` to adopt it.
@@ -281,7 +299,7 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   asserts the bytecode of both is unchanged: public no-argument constructor,
   `implements androidx.startup.Initializer`, AndroidX's own `dependencies()` signature. A test source
   set gets **no** metadata compilation — `ls startup/build/classes/kotlin/metadata` lists
-  `appleMain`, `commonMain`, `nativeMain` and `nonAndroidMain` and nothing ending in `Test` — so
+  `commonMain`, `nativeMain` and `nonAndroidMain` and nothing ending in `Test` — so
   those two files cannot say anything about the shape's portability, and for two rounds this file
   and README.md claimed a portability they never checked. `sample`'s `RuntimeInfoInitializer` is the
   pin that can: it is the redeclaring shape in a `commonMain` that `./gradlew build` really does
@@ -304,26 +322,16 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   never mentions it. Annotate the `actual`, not the `expect`. The annotation resolves in
   `nonAndroidMain`, which compiles for JS, Wasm and the JVM too, for the same reason
   `@HiddenFromObjC` does.
-- `fun initializerKey(objCClass: ObjCClass)` in `appleMain`, over
-  `kotlinx.cinterop.getOriginalKotlinClass`, under `@file:OptIn(BetaInteropApi::class,
-  ExperimentalForeignApi::class)`. It exports as `initializerKey(objCClass:)` taking a `Class`, and
-  it is the only way Swift can name a *Kotlin* initializer without building one:
-  `initializerKey(initializer:)` needs an instance, so naming a component with a side-effecting
-  constructor starts it. A Kotlin test binary exports nothing to Objective-C, so
-  `getOriginalKotlinClass` can never resolve a Kotlin class there and only the rejection path is
-  testable from Kotlin; the happy path is pinned in the header by `checkObjCExport` and was run once
-  by hand, linking a Swift executable against `sample`'s exported framework and spawning it on the
-  simulator. **Deprecated in 1.1.0, removed in 2.0.0**, because `androidx.startup` has no
-  counterpart and it was the only Apple-only declaration in the API. A `WARNING`-level `@Deprecated`
-  leaves the Objective-C export untouched, so `checkObjCExport` still asserts
-  `swift_name("initializerKey(objCClass:)")` is present and must keep doing so until it goes.
-- That file **must be named `InitializerKey.kt`**, matching the `commonMain` and `nonAndroidMain`
-  files it joins. Kotlin/Native derives the Objective-C facade class from the file name, so naming
-  it `ObjCInitializerKey.kt` puts the function in `ObjCInitializerKeyKt` and Swift cannot reach it
+- **Every `initializerKey` overload lives in a file named `InitializerKey.kt`**, in whichever source
+  set declares it. Kotlin/Native derives the Objective-C facade class from the file name, so an
+  overload in `ObjCInitializerKey.kt` lands in `ObjCInitializerKeyKt` and Swift cannot reach it
   through `InitializerKeyKt` at all — `swiftc` reports *no exact matches in call to class method
-  'initializerKey'* and lists only the two overloads from the other facade. Same-named files across
+  'initializerKey'* and lists only the overloads from the other facade. Same-named files across
   source sets are the established pattern here and they merge into one facade, which is what
-  `Context.kt`, `AppInitializer.kt` and `InitializerKey.kt` already rely on.
+  `Context.kt`, `AppInitializer.kt` and `InitializerKey.kt` already rely on. This is how
+  `initializerKey(objCClass:)` was reachable from Swift while it existed, in an `appleMain`
+  `InitializerKey.kt` over `kotlinx.cinterop.getOriginalKotlinClass`; it is gone in 2.0.0 and is not
+  coming back, but the naming rule binds every overload that stays.
 - `export(project(":startup"))` on a consumer's framework is not optional, and neither README.md nor
   this file may imply otherwise, though it may already be there transitively: a framework with
   `transitiveExport = true` that exports a module declaring `api(...)` on this library exports this
@@ -421,19 +429,17 @@ Deliberate, documented in README.md, and not to be "fixed" silently:
   elsewhere. Both are valid topological orders; only a declared dependency is portable.
 - `initializeComponent` succeeds on Android for a component no manifest registers, because AndroidX
   reflects and never reads a manifest. Off Android it throws.
-- `androidManifestMetadata()` can only emit fully qualified names on Android, because
-  `KClass.qualifiedName` does not compile on Kotlin/JS. `AndroidInitializerContractTest` pins the
-  Android output; the `commonTest` assertion can only check the shape. It returns the `<meta-data>`
-  lines and nothing else — no `<manifest>`, `<application>` or `<provider>` around them. README.md
-  used to imply otherwise and no longer does. Deprecated in 1.1.0; see **Deprecated in 1.1.0**.
-- `AppInitializer` has three members off Android that Android does not have: `isInitialized`,
-  `initializationOrder` and `manifest`. They stay out of the `expect` on purpose.
-  `androidx.startup.AppInitializer` is a `typealias` target, so nothing can be added to it, and it
-  exposes neither the order it created things in nor any state to derive one from; an `expect` with
-  a lying Android `actual` would be worse than an unresolved reference. All three are deprecated in
-  1.1.0 and removed in 2.0.0, which closes this row of the difference rather than papering over it:
-  from 2.0.0 the answer on all eleven targets is to record what you need from inside your own
-  `create`, which is what `sample`'s `SampleReport` already does.
+- A key names its class fully on Android, where it is a `java.lang.Class`, and simply everywhere
+  else, because `KClass.qualifiedName` does not compile on Kotlin/JS. That is why an AndroidManifest
+  parity check has to live in an Android source set: `sample`'s `AndroidManifestParityTest` compares
+  `eagerComponents.map { it.name }` against the XML and could not do so from `commonTest`.
+- `AppInitializer` is the same two members on all eleven targets as of 2.0.0. Until 1.1.0 it carried
+  `isInitialized`, `initializationOrder` and `manifest` off Android; they stayed out of the `expect`
+  because `androidx.startup.AppInitializer` is a `typealias` target, so nothing can be added to it,
+  and it exposes neither the order it created things in nor any state to derive one from. Removing
+  them closed this row of the difference rather than papering over it: the answer on all eleven
+  targets is to record what you need from inside your own `create`, which is what `sample`'s
+  `SampleReport` already does.
 - `macosX64` and `iosX64` are compiled and linked but never executed anywhere, on this machine or in
   CI.
 
@@ -454,21 +460,24 @@ the metadata task is the one a consumer's own published module runs. `./gradlew 
 a hand-written list of per-target compile tasks does not, and twice now a round of verification that
 listed only those reported a shape as working when it was not.
 
-**`./gradlew build` emits no `w:` warning from any source file, and it stays that way.** Every call
-site of one of the eight deprecated declarations carries `@Suppress("DEPRECATION")`; see
-**Deprecated in 1.1.0**. The one `w:` the build does print,
-`target macos_x64 is deprecated and will be removed soon`, comes from the Kotlin/Native target-tier
-policy rather than from anything in this repository, appears whenever a `macosX64` compilation
-actually executes rather than being up to date, and has no source-level suppression — the
-`@Suppress("DEPRECATION")` already on `macosX64()` in `startup/build.gradle.kts` silences the Gradle
-DSL deprecation, not the compiler's.
+**`./gradlew build` emits no `w:` warning from any source file, and it stays that way.** As of 2.0.0
+no `.kt` file carries `@Suppress("DEPRECATION")` at all — the eight declarations that needed one are
+gone — so one appearing in Kotlin source again is a signal that something was reintroduced. The one
+`w:` the build does print, `target macos_x64 is deprecated and will be removed soon`, comes from the
+Kotlin/Native target-tier policy rather than from anything in this repository, appears whenever a
+`macosX64` compilation actually executes rather than being up to date, and has no source-level
+suppression — the two `@Suppress("DEPRECATION")` annotations left in the repository are the ones on
+`macosX64()` in the two build scripts, and they silence the Gradle DSL deprecation, not the
+compiler's.
 
 Three verification tasks are wired into `check` beyond the tests.
 
 `:startup:checkObjCExport` links `Startup.framework` for `iosSimulatorArm64` and greps the generated
 Objective-C header. It asserts that the four `inline reified` registration functions are absent from
-it, that the six key-taking overloads are present, and that `Context` is exported as
-`StartupContext` and not under its bare name.
+it, that the five key-taking overloads are present — `metaData(component:factory:)`,
+`lazyInitializer(component:factory:)`, `remove(component:)`, `initializerKey(initializer:)` and
+`initializerKey(kClass:)`, six until `initializerKey(objCClass:)` went in 2.0.0 — and that `Context`
+is exported as `StartupContext` and not under its bare name.
 
 `:sample:checkConsumerObjCExport` links two more frameworks from `sample`, which unlike `:startup`
 is a *consumer* of the library. One exports `:startup` and one does not, and the task greps both:

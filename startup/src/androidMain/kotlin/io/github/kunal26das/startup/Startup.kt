@@ -11,8 +11,8 @@ actual object Startup {
      *
      * AndroidX answers [AppInitializer.isEagerlyInitialized] from what
      * `InitializationProvider` discovered in the AndroidManifest, so a component started
-     * from here alone still reports `false`. Paste
-     * [StartupManifest.androidManifestMetadata] into the manifest to make the two agree.
+     * from here alone still reports `false`. Declare it as a `<meta-data>` entry in the
+     * AndroidManifest to make the two agree.
      */
     actual fun install(context: Context, manifest: StartupManifest): AppInitializer {
         val instance = AppInitializer.getInstance(context)

@@ -3,7 +3,7 @@ package io.github.kunal26das.startup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Exercises the registry: eager versus lazy, composition, and AndroidManifest parity. */
+/** Exercises the registry: eager versus lazy, tombstones and composition. */
 class StartupManifestTest {
 
     private val manifest = StartupManifest {
@@ -71,39 +71,5 @@ class StartupManifestTest {
         assertEquals(true, initializerKey<AlphaInitializer>() in application)
         val expected: List<AnyInitializerKey> = listOf(initializerKey<BetaInitializer>())
         assertEquals(expected, application.eagerComponents)
-    }
-
-    /**
-     * The generated metadata is the AndroidManifest form of the same registry, so the two
-     * sources of truth can be checked against each other instead of drifting apart.
-     */
-    @Suppress("DEPRECATION")
-    @Test
-    fun androidManifestMetadataMatchesTheRegistry() {
-        val alpha = componentName(initializerKey<AlphaInitializer>())
-        val gamma = componentName(initializerKey<GammaInitializer>())
-        val expected = listOf(
-            "<meta-data android:name=\"$alpha\" android:value=\"androidx.startup\" />",
-            "<meta-data android:name=\"$gamma\" tools:node=\"remove\" />",
-        ).joinToString("\n")
-        assertEquals(expected, manifest.androidManifestMetadata())
-    }
-
-    /** Every eager component appears in the generated metadata, and no lazy one does. */
-    @Suppress("DEPRECATION")
-    @Test
-    fun everyEagerComponentIsInTheGeneratedMetadata() {
-        val metadata = manifest.androidManifestMetadata()
-        val declared = Regex("android:name=\"([^\"]+)\"")
-            .findAll(metadata)
-            .map { it.groupValues[1] }
-            .toList()
-        assertEquals(
-            listOf(
-                componentName(initializerKey<AlphaInitializer>()),
-                componentName(initializerKey<GammaInitializer>()),
-            ),
-            declared,
-        )
     }
 }

@@ -54,22 +54,6 @@ class AndroidInitializerContractTest {
     }
 
     /**
-     * Generated on Android, the metadata names classes the way `Class.forName` needs them
-     * named. Off Android a key can only name its class simply, which is why this
-     * assertion lives here.
-     */
-    @Suppress("DEPRECATION")
-    @Test
-    fun androidManifestMetadataNamesClassesFully() {
-        val manifest = StartupManifest { metaData<AlphaInitializer> { AlphaInitializer() } }
-        assertEquals(
-            "<meta-data android:name=\"io.github.kunal26das.startup.AlphaInitializer\" " +
-                "android:value=\"androidx.startup\" />",
-            manifest.androidManifestMetadata(),
-        )
-    }
-
-    /**
      * The `expect class` that extends [BaseInitializer] keeps the same contract, which is
      * what makes it a legal replacement for the longer shape that redeclares
      * `dependencies` as well as `create`.
@@ -101,31 +85,24 @@ class AndroidInitializerContractTest {
         )
     }
 
+    /**
+     * A key names its class the way `Class.forName` needs it named, which is what every
+     * Android diagnostic prints and what makes an AndroidManifest parity test possible at
+     * all. Off Android a key can only name its class simply, which is why this assertion
+     * lives here.
+     */
+    @Test
+    fun aKeyNamesItsClassFully() {
+        assertEquals(
+            "io.github.kunal26das.startup.AlphaInitializer",
+            componentName(initializerKey<AlphaInitializer>()),
+        )
+    }
+
     /** A key built from an instance is the same class token the reified overload emits. */
     @Test
     fun anInstanceKeyIsTheAndroidxClassToken() {
         assertEquals<Any>(AlphaInitializer::class.java, initializerKey(AlphaInitializer()))
-    }
-
-    /**
-     * Generated on Android, drift names classes the way `Class.forName` needs them named,
-     * so a line can be pasted straight into the AndroidManifest that is missing it.
-     */
-    @Suppress("DEPRECATION")
-    @Test
-    fun androidManifestDriftNamesClassesFully() {
-        val manifest = StartupManifest { metaData<AlphaInitializer> { AlphaInitializer() } }
-        assertEquals(
-            listOf(
-                "io.github.kunal26das.startup.AlphaInitializer is eager in the StartupManifest " +
-                    "and is not declared in the AndroidManifest, so it never runs on Android.",
-            ),
-            manifest.androidManifestDrift(emptySet()),
-        )
-        assertEquals(
-            emptyList(),
-            manifest.androidManifestDrift(setOf("io.github.kunal26das.startup.AlphaInitializer")),
-        )
     }
 
     private companion object {

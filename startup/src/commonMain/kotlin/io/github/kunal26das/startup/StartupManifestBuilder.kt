@@ -80,9 +80,8 @@ class StartupManifestBuilder internal constructor() {
      * On Android this only suppresses what [Startup.install] would otherwise start. A
      * component that a library contributed through its own AndroidManifest is created by
      * `InitializationProvider` before any application code runs, so nothing here can
-     * reach it; suppressing that needs a real `tools:node="remove"` entry in the
-     * application's AndroidManifest, which [StartupManifest.androidManifestMetadata]
-     * emits.
+     * reach it; suppressing that needs a real `tools:node="remove"` entry written by hand
+     * in the application's AndroidManifest.
      */
     @HiddenFromObjC
     inline fun <reified T : Initializer<*>> remove() {

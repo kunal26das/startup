@@ -27,16 +27,16 @@ class AndroidSampleStartupTest {
         assertEquals(Boolean::class.javaPrimitiveType, method.returnType)
     }
 
-    /** The generated block names the same components the shared manifest marks eager. */
+    /** A key on Android is a class token, so the shared manifest already names its components fully. */
     @Test
-    fun androidManifestMetadataNamesTheEagerComponents() {
+    fun theEagerComponentsAreNamedFully() {
         assertEquals(
-            SampleStartup.manifest.eagerComponents.map { it.name }.sorted(),
-            Regex("android:name=\"([^\"]+)\"")
-                .findAll(AndroidSampleStartup.androidManifestMetadata())
-                .map { it.groupValues[1] }
-                .toList()
-                .sorted(),
+            listOf(
+                "io.github.kunal26das.startup.sample.AnalyticsInitializer",
+                "io.github.kunal26das.startup.sample.CrashReportingInitializer",
+                "io.github.kunal26das.startup.sample.RuntimeInfoInitializer",
+            ),
+            SampleStartup.manifest.eagerComponents.map { it.name },
         )
     }
 }

@@ -43,14 +43,7 @@ internal class StartupEngine(private val context: Context) {
             initialized[key] as T
         }
 
-    fun manifest(): StartupManifest = lock.withLock { installed }
-
     fun isEager(component: AnyInitializerKey): Boolean = lock.withLock { installed.isEager(component) }
-
-    fun isInitialized(component: AnyInitializerKey): Boolean =
-        lock.withLock { initialized.containsKey(component) }
-
-    fun initializationOrder(): List<AnyInitializerKey> = lock.withLock { initialized.keys.toList() }
 
     private fun execute(plan: StartupPlan) {
         for (component in plan.order) {

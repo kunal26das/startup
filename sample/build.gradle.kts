@@ -147,7 +147,6 @@ val checkConsumerObjCExport = tasks.register("checkConsumerObjCExport") {
             "swift_name(\"InitializerKey\")",
             "swift_name(\"InitializerKeyKt\")",
             "swift_name(\"initializerKey(initializer:)\")",
-            "swift_name(\"initializerKey(objCClass:)\")",
             "swift_name(\"StartupContext\")",
             "swift_name(\"DefaultContext\")",
             "swift_name(\"Startup\")",

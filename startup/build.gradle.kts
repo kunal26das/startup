@@ -10,7 +10,7 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-val artifactVersion = "1.1.0"
+val artifactVersion = "2.0.0"
 val androidMinSdk = 21
 val androidMinCompileSdk = 34
 val androidAar = layout.buildDirectory.file("outputs/aar/startup.aar")
@@ -135,7 +135,6 @@ val checkObjCExport = tasks.register("checkObjCExport") {
             "swift_name(\"remove(component:)\")",
             "swift_name(\"initializerKey(initializer:)\")",
             "swift_name(\"initializerKey(kClass:)\")",
-            "swift_name(\"initializerKey(objCClass:)\")",
         ).filterNot(header::contains)
         val colliding = listOf(
             "swift_name(\"Context\")",

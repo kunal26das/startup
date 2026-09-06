@@ -7,13 +7,12 @@ package io.github.kunal26das.startup
  * Android-only call site drive the very same object. Obtain one through [Startup],
  * because a static factory on a Java class cannot satisfy an `expect companion object`.
  *
- * The two members below are the whole of what shared code can call, because they are the
- * whole of what AndroidX exposes. The non-Android runtime additionally answers
- * `isInitialized(component)`, `initializationOrder()` and `manifest()`. All three are
- * deprecated in 1.1.0 and removed in 2.0.0: `androidx.startup.AppInitializer` has no
- * equivalent and no accessible state to derive one from, so they were the one place this
- * API differed by platform. Record what you need from inside your own
- * [Initializer.create].
+ * The two members below are the whole of this type, on every target, because they are the
+ * whole of what AndroidX exposes. Neither runtime reports what it has already created or
+ * in what order: `androidx.startup.AppInitializer` has no equivalent and no accessible
+ * state to derive one from, so answering it off Android alone was the one place this API
+ * differed by platform. Record what you need from inside your own [Initializer.create],
+ * and hold on to the [StartupManifest] you passed to [Startup.install].
  */
 expect class AppInitializer {
 
