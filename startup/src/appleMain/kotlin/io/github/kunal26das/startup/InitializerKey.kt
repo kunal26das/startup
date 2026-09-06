@@ -10,6 +10,9 @@ import kotlinx.cinterop.getOriginalKotlinClass
 import platform.Foundation.NSStringFromClass
 
 /**
+  * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+  * library's contract is to mirror it. See the annotation for what to do instead.
+  *
  * The [InitializerKey] for the Kotlin class behind the Objective-C class [objCClass].
  *
  * This is the overload that lets Swift name a Kotlin initializer without building one.
@@ -34,6 +37,13 @@ import platform.Foundation.NSStringFromClass
  *
  * @throws StartupException if [objCClass] is not a Kotlin class exported to Objective-C.
  */
+@Deprecated(
+    message = "androidx.startup has no counterpart for this, and this library's contract is to " +
+        "mirror androidx.startup. Removed in 2.0.0. Use initializerKey(initializer) with an " +
+        "instance, which is exported as initializerKey(initializer:) and is the one overload " +
+        "every target has.",
+    level = DeprecationLevel.WARNING,
+)
 fun initializerKey(objCClass: ObjCClass): AnyInitializerKey {
     val kClass = getOriginalKotlinClass(objCClass) ?: throw StartupException(
         "${NSStringFromClass(objCClass)} is not a Kotlin class, so it has no InitializerKey. " +

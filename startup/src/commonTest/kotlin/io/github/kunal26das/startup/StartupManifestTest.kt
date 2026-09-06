@@ -77,6 +77,7 @@ class StartupManifestTest {
      * The generated metadata is the AndroidManifest form of the same registry, so the two
      * sources of truth can be checked against each other instead of drifting apart.
      */
+    @Suppress("DEPRECATION")
     @Test
     fun androidManifestMetadataMatchesTheRegistry() {
         val alpha = componentName(initializerKey<AlphaInitializer>())
@@ -89,6 +90,7 @@ class StartupManifestTest {
     }
 
     /** Every eager component appears in the generated metadata, and no lazy one does. */
+    @Suppress("DEPRECATION")
     @Test
     fun everyEagerComponentIsInTheGeneratedMetadata() {
         val metadata = manifest.androidManifestMetadata()

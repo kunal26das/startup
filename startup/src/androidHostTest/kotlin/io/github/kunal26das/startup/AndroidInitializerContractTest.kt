@@ -58,6 +58,7 @@ class AndroidInitializerContractTest {
      * named. Off Android a key can only name its class simply, which is why this
      * assertion lives here.
      */
+    @Suppress("DEPRECATION")
     @Test
     fun androidManifestMetadataNamesClassesFully() {
         val manifest = StartupManifest { metaData<AlphaInitializer> { AlphaInitializer() } }
@@ -110,6 +111,7 @@ class AndroidInitializerContractTest {
      * Generated on Android, drift names classes the way `Class.forName` needs them named,
      * so a line can be pasted straight into the AndroidManifest that is missing it.
      */
+    @Suppress("DEPRECATION")
     @Test
     fun androidManifestDriftNamesClassesFully() {
         val manifest = StartupManifest { metaData<AlphaInitializer> { AlphaInitializer() } }

@@ -21,12 +21,50 @@ actual class AppInitializer internal constructor(context: Context) {
     actual fun isEagerlyInitialized(component: AnyInitializerKey): Boolean =
         engine.isEager(component)
 
-    /** Whether [component] has already been created. */
+    /**
+     * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+     * library's contract is to mirror it. See the annotation for what to do instead.
+     *
+     * Whether [component] has already been created.
+     */
+    @Deprecated(
+        message = "androidx.startup has no counterpart for this, so it exists on ten targets and " +
+            "not on Android, which is the asymmetry this library exists to avoid. Removed in " +
+            "2.0.0. Record what you need from inside your own Initializer.create, which is what " +
+            "the sample's SampleReport does.",
+        level = DeprecationLevel.WARNING,
+    )
     fun isInitialized(component: AnyInitializerKey): Boolean = engine.isInitialized(component)
 
-    /** The components created so far, in the order they were created. */
+    /**
+      * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+      * library's contract is to mirror it. See the annotation for what to do instead.
+      *
+     * The components created so far, in the order they were created. Deprecated; see the
+     * annotation.
+     */
+    @Deprecated(
+        message = "androidx.startup has no counterpart for this, so it exists on ten targets and " +
+            "not on Android, which is the asymmetry this library exists to avoid. Removed in " +
+            "2.0.0. Record the order from inside your own Initializer.create, which is what the " +
+            "sample's SampleReport does.",
+        level = DeprecationLevel.WARNING,
+    )
     fun initializationOrder(): List<AnyInitializerKey> = engine.initializationOrder()
 
-    /** The manifest installed so far. */
+    /**
+     * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+     * library's contract is to mirror it. See the annotation for what to do instead.
+     *
+     * The manifest installed so far.
+     */
+    @Deprecated(
+        message = "androidx.startup has no counterpart for this, so it exists on ten targets and " +
+            "not on Android, which is the asymmetry this library exists to avoid. Removed in " +
+            "2.0.0. Hold on to the StartupManifest you passed to Startup.install, or record what " +
+            "you need from inside your own Initializer.create, which is what the sample's " +
+            "SampleReport does.",
+        level = DeprecationLevel.WARNING,
+    )
     fun manifest(): StartupManifest = engine.manifest()
 }

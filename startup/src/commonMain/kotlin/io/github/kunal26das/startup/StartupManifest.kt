@@ -5,9 +5,9 @@ package io.github.kunal26das.startup
  * `<meta-data>` entries inside `androidx.startup.InitializationProvider`.
  *
  * Off Android there is no manifest merger and no reflection, so this object is the only
- * source of truth. On Android the AndroidManifest is still what AndroidX reads, which
- * makes [androidManifestMetadata] the way to keep the two in step, and makes it possible
- * for a test to assert that they agree.
+ * source of truth. On Android the AndroidManifest is still what AndroidX reads, and it
+ * stays the source of truth there: write its `<meta-data>` entries by hand, exactly as a
+ * plain `androidx.startup` application does.
  *
  * Components are registered as **factories**, never as instances. Registering an instance
  * would double-construct every initializer on Android, where AndroidX builds its own
@@ -58,6 +58,9 @@ class StartupManifest internal constructor(
     }
 
     /**
+      * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+      * library's contract is to mirror it. See the annotation for what to do instead.
+      *
      * The `<meta-data>` lines this manifest corresponds to, ready to paste into the
      * `androidx.startup.InitializationProvider` block of an AndroidManifest. Eager
      * entries become `android:value="androidx.startup"`, tombstones become
@@ -78,6 +81,13 @@ class StartupManifest internal constructor(
      * in needs `xmlns:tools="http://schemas.android.com/tools"` or the manifest merger
      * fails with an unbound prefix.
      */
+    @Deprecated(
+        message = "androidx.startup has no counterpart for this, and this library's contract is " +
+            "to mirror androidx.startup. Removed in 2.0.0. Keep the AndroidManifest as the " +
+            "single source of truth on Android and write its <meta-data> entries by hand, as a " +
+            "plain androidx.startup application does.",
+        level = DeprecationLevel.WARNING,
+    )
     fun androidManifestMetadata(): String = nodes.entries.mapNotNull { (component, node) ->
         val name = componentName(component)
         when (node) {
@@ -88,6 +98,9 @@ class StartupManifest internal constructor(
     }.joinToString("\n")
 
     /**
+      * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+      * library's contract is to mirror it. See the annotation for what to do instead.
+      *
      * Every disagreement between this manifest and an AndroidManifest whose
      * `androidx.startup.InitializationProvider` block declares [declared], named the way
      * [androidManifestMetadata] names components.
@@ -107,6 +120,14 @@ class StartupManifest internal constructor(
      * key can only name its class simply, so nothing will match. The overload taking a
      * `Context` reads [declared] from the running application's own merged manifest.
      */
+    @Deprecated(
+        message = "androidx.startup has no counterpart for this, and this library's contract is " +
+            "to mirror androidx.startup. Removed in 2.0.0. Keep the AndroidManifest as the " +
+            "single source of truth on Android and write its <meta-data> entries by hand. The " +
+            "drift it reports is real, so a consumer that wants the two registries held in step " +
+            "keeps a test of its own.",
+        level = DeprecationLevel.WARNING,
+    )
     fun androidManifestDrift(declared: Set<String>): List<String> =
         nodes.entries.mapNotNull { (component, node) ->
             val name = componentName(component)

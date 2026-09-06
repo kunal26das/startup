@@ -20,6 +20,7 @@ class AndroidManifestParityTest {
      * else does. The library reports the difference itself, so a failure names the
      * components that drifted rather than printing two sets to compare by eye.
      */
+    @Suppress("DEPRECATION")
     @Test
     fun theManifestDeclaresExactlyTheEagerComponents() {
         assertEquals(

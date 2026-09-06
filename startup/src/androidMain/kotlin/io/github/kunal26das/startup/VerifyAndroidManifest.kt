@@ -1,6 +1,9 @@
 package io.github.kunal26das.startup
 
 /**
+  * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+  * library's contract is to mirror it. See the annotation for what to do instead.
+  *
  * Throws unless the AndroidManifest of [context]'s package declares exactly the components
  * this manifest marks eager, as reported by [androidManifestDrift].
  *
@@ -13,6 +16,15 @@ package io.github.kunal26das.startup
  *
  * @throws StartupException listing every disagreement, one per line.
  */
+@Deprecated(
+    message = "androidx.startup has no counterpart for this, and this library's contract is to " +
+        "mirror androidx.startup. Removed in 2.0.0. Keep the AndroidManifest as the single " +
+        "source of truth on Android and write its <meta-data> entries by hand. The failure it " +
+        "catches is real, so a consumer that wants the two registries held in step keeps a test " +
+        "of its own.",
+    level = DeprecationLevel.WARNING,
+)
+@Suppress("DEPRECATION")
 fun StartupManifest.verifyAndroidManifest(context: Context) {
     val drift = androidManifestDrift(context)
     if (drift.isEmpty()) return

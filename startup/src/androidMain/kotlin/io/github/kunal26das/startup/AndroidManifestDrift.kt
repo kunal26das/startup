@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import androidx.startup.InitializationProvider
 
 /**
+  * Deprecated, and removed in 2.0.0: androidx.startup has no counterpart for this, and this
+  * library's contract is to mirror it. See the annotation for what to do instead.
+  *
  * Every disagreement between this manifest and the `<meta-data>` entries
  * `androidx.startup.InitializationProvider` actually declares in the merged AndroidManifest
  * of [context]'s package, one line each, empty when the two agree.
@@ -20,6 +23,15 @@ import androidx.startup.InitializationProvider
  * [StartupManifest] but forgotten in the AndroidManifest stops being an omission nobody
  * notices. Use [verifyAndroidManifest] to turn the same answer into a failure.
  */
+@Deprecated(
+    message = "androidx.startup has no counterpart for this, and this library's contract is to " +
+        "mirror androidx.startup. Removed in 2.0.0. Keep the AndroidManifest as the single " +
+        "source of truth on Android and write its <meta-data> entries by hand. The drift it " +
+        "reports is real, so a consumer that wants the two registries held in step keeps a test " +
+        "of its own.",
+    level = DeprecationLevel.WARNING,
+)
+@Suppress("DEPRECATION")
 fun StartupManifest.androidManifestDrift(context: Context): List<String> {
     val provider = ComponentName(context.packageName, InitializationProvider::class.java.name)
     val info = try {

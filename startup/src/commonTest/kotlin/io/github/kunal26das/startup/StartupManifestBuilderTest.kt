@@ -11,6 +11,7 @@ import kotlin.test.assertEquals
 class StartupManifestBuilderTest {
 
     /** Registering by a runtime key produces the very manifest the reified overloads do. */
+    @Suppress("DEPRECATION")
     @Test
     fun aRuntimeKeyRegistersTheSameEntry() {
         val reified = StartupManifest {

@@ -9,11 +9,10 @@ package io.github.kunal26das.startup
  *
  * The two members below are the whole of what shared code can call, because they are the
  * whole of what AndroidX exposes. The non-Android runtime additionally answers
- * `isInitialized(component)`, `initializationOrder()` and `manifest()`, and those three
- * are deliberately absent from this `expect`: `androidx.startup.AppInitializer` has no
- * equivalent and no accessible state to derive one from, so declaring them here would
- * only move the failure from an unresolved reference to a stub that lies. Call them from
- * a non-Android source set, or record what you need from inside your own
+ * `isInitialized(component)`, `initializationOrder()` and `manifest()`. All three are
+ * deprecated in 1.1.0 and removed in 2.0.0: `androidx.startup.AppInitializer` has no
+ * equivalent and no accessible state to derive one from, so they were the one place this
+ * API differed by platform. Record what you need from inside your own
  * [Initializer.create].
  */
 expect class AppInitializer {

@@ -26,7 +26,7 @@ CI has no x86_64 macOS runner, so a green build is not evidence that their test 
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.kunal26das:startup:1.0.0")
+            implementation("io.github.kunal26das:startup:1.1.0")
         }
     }
 }
@@ -212,8 +212,7 @@ val applicationManifest = StartupManifest {
 On Android `remove<T>()` only suppresses what `Startup.install` would otherwise start. A component a
 library contributed through its own AndroidManifest is created by `InitializationProvider` before any
 application code runs, so nothing here can reach it; suppressing that needs a real
-`tools:node="remove"` entry in the application's AndroidManifest, which `androidManifestMetadata()`
-emits.
+`tools:node="remove"` entry in the application's AndroidManifest, written by hand.
 
 ### Register a component whose key only exists at run time
 
@@ -255,21 +254,8 @@ is a worked example, and `AndroidManifestParityTest` fails the build if it drift
 `Startup.install` remains available as the programmatic equivalent, and is the only route on the
 other ten targets.
 
-`androidManifestMetadata()` prints the `<meta-data>` lines, one per eager component and nothing
-else. Run it on Android:
-
-```kotlin
-println(manifest.androidManifestMetadata())
-```
-
-and that is the whole output, one line per entry:
-
-```xml
-<meta-data android:name="com.example.AnalyticsInitializer" android:value="androidx.startup" />
-```
-
-Those lines are what goes inside the provider block. The block itself is yours to write once, and
-is not part of the output:
+Each eager component is one `<meta-data>` line inside the provider block. Write those lines by hand,
+exactly as a plain `androidx.startup` application does:
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -288,14 +274,16 @@ is not part of the output:
 </manifest>
 ```
 
-Generate the lines on Android. `InitializationProvider` resolves each name with `Class.forName`, so
-every one has to be fully qualified, and only the Android key can supply that; the other ten targets
-name a class simply, because `KClass.qualifiedName` does not compile on Kotlin/JS. The
-`xmlns:tools` declaration is required as soon as a tombstone is in the output.
+`InitializationProvider` resolves each name with `Class.forName`, so every one has to be fully
+qualified. The `xmlns:tools` declaration is required as soon as a `tools:node="remove"` entry is in
+the block.
+
+`manifest.androidManifestMetadata()` generated those lines for you and is **deprecated in 1.1.0,
+removed in 2.0.0**; see **Deprecated in 1.1.0** below.
 
 AndroidX answers `isEagerlyInitialized` from what `InitializationProvider` discovered in the
 AndroidManifest, so a component started only by `Startup.install` still reports `false` there.
-Pasting the generated lines into the manifest is what makes the two agree.
+Declaring the component in the manifest is what makes the two agree.
 
 ### Keep the two Android registries in step
 
@@ -305,31 +293,43 @@ reads the AndroidManifest and nothing else. So a component registered with `meta
 out of the XML runs correctly on ten targets and silently never runs on the eleventh. There is no
 exception, no log and no lint check, because from AndroidX's point of view nothing is wrong.
 
-Two Android-only functions close that gap without the consumer having to own a test:
+Until 1.1.0 the library answered that itself, with `verifyAndroidManifest(context)`,
+`androidManifestDrift(context)` and `androidManifestDrift(declared)`. All three are **deprecated in
+1.1.0 and removed in 2.0.0**: `androidx.startup` has no counterpart for any of them, and mirroring
+`androidx.startup` is this library's whole contract. **The problem has not gone away with them.**
+From 2.0.0 the answer is the one a plain `androidx.startup` application already uses, and it is two
+things.
+
+**The AndroidManifest is the source of truth on Android.** Write its `<meta-data>` entries by hand,
+declare there exactly what should start eagerly, and treat the `StartupManifest` as the registry for
+the other ten targets. Nothing in the library reconciles the two for you.
+
+**Keep a parity test of your own.** It is a dozen lines against the API that is staying, and it goes
+in an Android source set because that is where a key is a `java.lang.Class` and can name its
+component the way `Class.forName` needs it named:
 
 ```kotlin
-manifest.verifyAndroidManifest(context)
+class AndroidManifestParityTest {
 
-val drift: List<String> = manifest.androidManifestDrift(context)
+    @Test
+    fun theManifestDeclaresExactlyTheEagerComponents() {
+        val xml = File(System.getProperty("myapp.androidManifest")!!).readText()
+        val declared = Regex("<meta-data[^>]*?android:name=\"([^\"]+)\"", RegexOption.DOT_MATCHES_ALL)
+            .findAll(xml)
+            .map { it.groupValues[1] }
+            .toSet()
+        assertEquals(manifest.eagerComponents.map { it.name }.toSet(), declared)
+    }
+}
 ```
 
-Both read the `<meta-data>` entries `androidx.startup.InitializationProvider` really declares, from
-`PackageManager.getProviderInfo(..., GET_META_DATA)`, which is the same registry AndroidX itself
-reads at process start. `androidManifestDrift` returns one line per disagreement and creates
-nothing; `verifyAndroidManifest` throws `StartupException` listing them. Call either from a
-debug-only initializer and a forgotten `<meta-data>` line becomes a launch-time failure naming the
-component instead of a component that quietly never runs.
-
-Both directions are reported. A component eager in the `StartupManifest` and absent from the XML
-never runs on Android; one the XML declares while the `StartupManifest` keeps it lazy or removed
-runs eagerly on Android alone. A name the XML declares that the `StartupManifest` has never heard of
-is **not** reported: a mixed application is free to declare initializers written directly against
-`androidx.startup` beside these, and reporting those would make the check useless in exactly the
-applications that need it most.
-
-`manifest.androidManifestDrift(declared: Set<String>)` is the same comparison against a set of names
-you supply, and is `commonMain` code, so a unit test can read the XML itself and assert on it.
-`sample`'s `AndroidManifestParityTest` does exactly that and fails the build on drift.
+Both directions matter. A component eager in the `StartupManifest` and absent from the XML never
+runs on Android; one the XML declares while the `StartupManifest` keeps it lazy or removed runs
+eagerly on Android alone. A name the XML declares that the `StartupManifest` has never heard of is
+your call rather than the library's: a mixed application is free to declare initializers written
+directly against `androidx.startup` beside these, and a test that reports those is useless in exactly
+the applications that need one most. The set comparison above treats such a name as a failure, so
+subtract them, or compare only the names the `StartupManifest` knows.
 
 **Put the XML on the test task's inputs, or the check stops running.** A test that reads a file
 Gradle does not know about stays `UP-TO-DATE` when only that file changes, so deleting a
@@ -346,8 +346,9 @@ tasks.withType<Test>().configureEach {
 }
 ```
 
-`verifyAndroidManifest(context)` has no such trap, because it runs in the application rather than in
-Gradle and reads the merged manifest of the process it is running in.
+`sample`'s own `AndroidManifestParityTest` still calls `androidManifestDrift(declared)`, under
+`@Suppress("DEPRECATION")`, because a declaration that ships in 1.1.0 has to stay covered by a test
+in 1.1.0. It is not the shape to copy; the one above is.
 
 Android-only source sets can keep using the verbatim AndroidX spelling against the very same
 components:
@@ -374,8 +375,8 @@ exactly once however many threads ask for it, and an `Initializer.create` may ca
 levels as data, and that is an inspection API, not a scheduling hook — see **Startup is sequential,
 and the waves will not change that** below.
 
-`AppInitializer` carries three members here that it does not carry on Android, and they are the
-diagnostics for "did my graph actually run the way I declared it?":
+`AppInitializer` carries three members here that it does not carry on Android, and all three are
+**deprecated in 1.1.0 and removed in 2.0.0**:
 
 ```kotlin
 val appInitializer = Startup.install(DefaultContext, manifest)
@@ -387,11 +388,11 @@ appInitializer.manifest()
 
 **They do not exist on Android, and therefore not in `commonMain`.** On Android `AppInitializer`
 **is** `androidx.startup.AppInitializer`, which exposes neither the order it created things in nor
-whether a given component exists, and keeps no accessible state to derive either from. Declaring
-them in the `expect` would only move the failure from an unresolved reference to a stub that lies,
-so a call to any of the three compiles in `desktopMain` and fails in `commonMain`. Shared code that
-needs an order on all eleven targets has to record one from inside its own `create`, which is what
-`sample`'s `SampleReport` does.
+whether a given component exists, and keeps no accessible state to derive either from, so
+`androidx.startup` has no counterpart to mirror and these three were the only members of the API
+that ten targets had and the eleventh did not. Record what you need from inside your own `create`,
+which is what `sample`'s `SampleReport` does, and hold on to the `StartupManifest` you passed to
+`Startup.install`; see **Deprecated in 1.1.0** below.
 
 ### From Swift and Objective-C
 
@@ -404,12 +405,12 @@ snippets in this section name types that do not exist:
 ```kotlin
 kotlin {
     sourceSets.commonMain.dependencies {
-        api("io.github.kunal26das:startup:1.0.0")
+        api("io.github.kunal26das:startup:1.1.0")
     }
     listOf(iosArm64(), iosSimulatorArm64(), iosX64()).forEach {
         it.binaries.framework {
             baseName = "Shared"
-            export("io.github.kunal26das:startup:1.0.0")
+            export("io.github.kunal26das:startup:1.1.0")
         }
     }
 }
@@ -425,7 +426,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 kotlin {
     targets.withType<KotlinNativeTarget>().configureEach {
         binaries.withType<Framework>().configureEach {
-            export("io.github.kunal26das:startup:1.0.0")
+            export("io.github.kunal26das:startup:1.1.0")
         }
     }
 }
@@ -435,7 +436,7 @@ kotlin {
 the framework are not specified as API dependencies of a corresponding source set*.
 
 You may already have it without writing the line. A framework with `transitiveExport = true` that
-exports a module which declares `api("io.github.kunal26das:startup:1.0.0")` exports this library too,
+exports a module which declares `api("io.github.kunal26das:startup:1.1.0")` exports this library too,
 which is what a convention plugin that exports a shared `core` module typically produces. Check the
 generated header for `swift_name("InitializerKeyKt")` before adding anything: if it is there, the
 export is already in place.
@@ -487,24 +488,27 @@ declares a `Context` of its own and a framework-level one shadows it in the iOS 
 Compose Multiplatform app has, with a `does not conform to protocol` error that never mentions the
 name.
 
-**Naming a Kotlin initializer from Swift needs no instance.** `initializerKey(objCClass:)` takes the
-class object, on all Apple targets:
+**Name an initializer from Swift with `initializerKey(initializer:)`.** It takes an instance, which
+is what a Swift host always has to work from anyway: a Swift class has no Kotlin class behind it, and
+`KotlinKClass` is not obtainable from Swift either.
 
 ```swift
 final class HostInitializer: NSObject, Initializer {
     func create(context: StartupContext) -> Any? { ... }
 
     func dependencies() -> [InitializerKey<Initializer>] {
-        [InitializerKeyKt.initializerKey(objCClass: KoinInitializer.self)]
+        [InitializerKeyKt.initializerKey(initializer: KoinInitializer())]
     }
 }
 ```
 
-`initializerKey(initializer:)` remains the overload for an initializer the host already holds, which
-is what a Swift one always is: a Swift class has no Kotlin class behind it, and `KotlinKClass` is not
-obtainable from Swift. Prefer `objCClass:` for a Kotlin component, because it does not run that
-component's constructor, so a constructor with a side effect does not fire merely from naming it. It
-throws `StartupException` for a class Kotlin did not declare.
+`initializerKey(objCClass:)` names a Kotlin component from its class object without constructing one,
+and is **deprecated in 1.1.0 and removed in 2.0.0**: `androidx.startup` has no counterpart, and it
+was the only Apple-only declaration in the API. Replacing it costs one throwaway instance per key,
+whose constructor runs. That is free for an initializer that holds nothing in its constructor and
+does its work in `create`, which is what this library asks of every initializer anyway: AndroidX
+builds each one reflectively through `getDeclaredConstructor().newInstance()`, at a moment the author
+does not choose. See **Deprecated in 1.1.0** below.
 
 `:startup`'s `checkObjCExport` task links `Startup.framework` and asserts on the generated header,
 and `:sample`'s `checkConsumerObjCExport` does the same for the two frameworks a *consumer* gets, so
@@ -530,8 +534,9 @@ all three are cases where code written and tested on Android would misbehave els
   Android too.
 - **Which registry decides.** Off Android the `StartupManifest` is the whole registry. On Android
   it is the AndroidManifest, and the factories in the `StartupManifest` are never called. That is
-  the one failure mode adopting this library adds, and `verifyAndroidManifest(context)` is the
-  answer to it; see **Keep the two Android registries in step** above.
+  the one failure mode adopting this library adds. The AndroidManifest is the source of truth there
+  and a parity test of your own is the answer to it; see **Keep the two Android registries in step**
+  above.
 
 ### Startup is sequential, and the waves will not change that
 
@@ -566,7 +571,7 @@ either way.
 | `Class<out Initializer<*>>`                           | `InitializerKey<T>`, `AnyInitializerKey`            | `typealias` to `java.lang.Class`|
 | `MyInitializer::class.java`                           | `initializerKey<MyInitializer>()`                   | inlines to a class constant    |
 | `instance.getClass()`                                 | `initializerKey(instance)`                          | `::class.java` on the instance |
-| no equivalent                                         | `initializerKey(objCClass)`                         | **absent**, Apple targets only |
+| `Class.forName(name)`                                 | `initializerKey(kClass)`                            | `::class.java` on the KClass   |
 | `androidx.startup.AppInitializer`                     | `AppInitializer`                                    | `typealias`                    |
 | `AppInitializer.getInstance(context)`                 | `Startup.getInstance(context)`                      | delegates to the static        |
 | `AppInitializer.initializeComponent(component)`       | `AppInitializer.initializeComponent(component)`     | same method                    |
@@ -576,12 +581,14 @@ either way.
 | `tools:node="remove"`                                 | `StartupManifest { remove<T>() }`                   | still the manifest             |
 | `InitializationProvider.onCreate()`                   | `Startup.install(context, manifest)`                | eagerly initializes            |
 | `androidx.startup.StartupException`                   | `StartupException`                                  | **not** a `typealias`          |
-| no equivalent                                         | `manifest.androidManifestMetadata()`                | Android only in practice       |
-| no equivalent                                         | `manifest.verifyAndroidManifest(context)`           | Android only                   |
-| no equivalent                                         | `manifest.androidManifestDrift(context)`            | Android only                   |
-| no equivalent                                         | `AppInitializer.isInitialized(component)`           | **absent** on Android          |
-| no equivalent                                         | `AppInitializer.initializationOrder()`              | **absent** on Android          |
-| no equivalent                                         | `AppInitializer.manifest()`                         | **absent** on Android          |
+| no equivalent                                         | `manifest.androidManifestMetadata()`                | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `manifest.androidManifestDrift(declared)`           | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `manifest.androidManifestDrift(context)`            | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `manifest.verifyAndroidManifest(context)`           | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `AppInitializer.isInitialized(component)`           | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `AppInitializer.initializationOrder()`              | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `AppInitializer.manifest()`                         | **deprecated**, gone in 2.0.0  |
+| no equivalent                                         | `initializerKey(objCClass)`                         | **deprecated**, gone in 2.0.0  |
 
 `StartupException` is deliberately our own type. AndroidX annotates its exception
 `@RestrictTo(LIBRARY)`, so aliasing it would make every consumer's `catch` clause fail lint's
@@ -591,10 +598,68 @@ own type on Android, exactly as they do in an app that uses `androidx.startup` d
 There is no `expect companion object` on `AppInitializer` because a Java static has no member for
 one to match, which is why `Startup` exists.
 
-The last three rows are the only asymmetry in the table, and it runs the other way from the rest:
-they are members the non-Android runtime has and Android does not, so they are absent from the
-`expect` and unavailable in `commonMain`. `androidx.startup.AppInitializer` exposes no equivalent
-and no accessible state to build one from. See **On every other platform** above.
+The last eight rows are the only ones whose left column reads *no equivalent* for a declaration
+`androidx.startup` genuinely has no counterpart for, and they are also the only platform asymmetry in
+the table: four exist for Android's manifest and do nothing useful off it, three exist on the other
+ten targets and not on Android, one exists on the Apple targets alone. All eight are deprecated in
+1.1.0 and removed in 2.0.0, and with them gone the table has one shape on all eleven targets. See
+**Deprecated in 1.1.0** below.
+
+The one *no equivalent* row above them, `StartupManifest { metaData(key) { it } }`, is not in that
+group and is not going anywhere. It is the registration `androidx.startup` performs by name in XML,
+expressed as a key, which makes it *closer* to `androidx.startup` than the `reified` overload beside
+it, and it is the only way Swift or a plugin host can register an initializer the compiler cannot
+name.
+
+## Deprecated in 1.1.0
+
+Eight declarations are deprecated in 1.1.0 and **removed in 2.0.0**. Each carries
+`DeprecationLevel.WARNING`, so 1.1.0 compiles everywhere 1.0.0 did and the migration window is a real
+one: a consumer that upgrades gets warnings, not errors.
+
+The reason is the same for all eight. **None of them has a counterpart in `androidx.startup`**, and
+mirroring `androidx.startup` is this library's whole contract — for Android that contract is literal,
+because `Initializer`, `AppInitializer`, `Context` and the key are `typealias`es of the AndroidX
+types. They were also the only platform asymmetry in the API mapping table: three exist on the ten
+non-Android targets and not on Android, four exist for Android's manifest and do nothing useful off
+it, and one exists on the Apple targets alone.
+
+| deprecated                                | what to do instead                                          |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| `AppInitializer.isInitialized(component)`  | record it from inside your own `Initializer.create`          |
+| `AppInitializer.initializationOrder()`     | record it from inside your own `Initializer.create`          |
+| `AppInitializer.manifest()`                | keep the `StartupManifest` you passed to `Startup.install`   |
+| `manifest.androidManifestMetadata()`       | write the `<meta-data>` entries by hand                      |
+| `manifest.androidManifestDrift(declared)`  | keep a parity test of your own                               |
+| `manifest.androidManifestDrift(context)`   | keep a parity test of your own                               |
+| `manifest.verifyAndroidManifest(context)`  | keep a parity test of your own                               |
+| `initializerKey(objCClass)`                | `initializerKey(initializer)`, from an instance              |
+
+`sample`'s `SampleReport` is the worked example for the first three. The initialization order it
+prints is a list each component appends to from inside its own `create`, which is exactly why the
+report reads the same on all eleven targets instead of on ten.
+
+The Android four are not a problem that has gone away. The `StartupManifest` and the AndroidManifest
+really are two registries and only Android reads the second, so a component in one and missing from
+the other still misbehaves on exactly one platform. What changes is who owns the answer: from 2.0.0
+the AndroidManifest is the source of truth on Android, its `<meta-data>` entries are written by hand
+as a plain `androidx.startup` application writes them, and a consumer that wants the two held in step
+keeps its own test. **Keep the two Android registries in step** above has one, in a dozen lines,
+against the API that is staying.
+
+`initializerKey(objCClass:)` was the only Apple-only declaration in the API.
+`initializerKey(initializer:)` needs an instance, so naming a component constructs a throwaway one
+and runs its constructor — a cost the class-object overload did not have. It bites only an
+initializer whose constructor does something, and none should: AndroidX builds every initializer
+reflectively through `getDeclaredConstructor().newInstance()`, at a moment the author does not
+choose, so the work belongs in `create`.
+
+**Nothing else changes.** Every other declaration published in 1.0.0 stays exactly as it was, the
+key-taking registration overloads included — `metaData(component, factory)`,
+`lazyInitializer(component, factory)`, `remove(component)` and `initializerKey(initializer)`. They
+are not deprecated and are not going anywhere: `androidx.startup`'s own registration is by name in
+XML, so a key-taking overload is *closer* to it than a `reified` one, and without them Swift cannot
+register a host-supplied initializer at all.
 
 ## The constructor-argument footgun
 

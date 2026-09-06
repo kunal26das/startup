@@ -17,6 +17,7 @@ class AndroidManifestDriftTest {
     }
 
     /** Nothing is reported when the AndroidManifest declares exactly the eager components. */
+    @Suppress("DEPRECATION")
     @Test
     fun agreementReportsNothing() {
         assertEquals(
@@ -26,6 +27,7 @@ class AndroidManifestDriftTest {
     }
 
     /** An eager component the AndroidManifest omits would silently never run on Android. */
+    @Suppress("DEPRECATION")
     @Test
     fun reportsAnEagerComponentTheAndroidManifestOmits() {
         val drift = manifest.androidManifestDrift(emptySet())
@@ -38,6 +40,7 @@ class AndroidManifestDriftTest {
     }
 
     /** A lazy or removed component the AndroidManifest declares runs eagerly on Android alone. */
+    @Suppress("DEPRECATION")
     @Test
     fun reportsAComponentTheAndroidManifestDeclaresAndTheRegistryDoesNot() {
         val drift = manifest.androidManifestDrift(
@@ -63,6 +66,7 @@ class AndroidManifestDriftTest {
      * against `androidx.startup`, which a mixed application is free to have. Reporting it
      * would make the check useless in exactly the applications that need it most.
      */
+    @Suppress("DEPRECATION")
     @Test
     fun ignoresAComponentTheRegistryNeverHeardOf() {
         assertEquals(

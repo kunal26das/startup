@@ -24,6 +24,7 @@ class StartupRuntimeTest {
     }
 
     /** The creation order is readable back as keys, not only as whatever a test logged. */
+    @Suppress("DEPRECATION")
     @Test
     fun recordsWhatItCreated() {
         val appInitializer = Startup.install(DefaultContext, diamond())
@@ -113,6 +114,7 @@ class StartupRuntimeTest {
      * components are eager and independent, so the loop really does still have the second
      * one ahead of it.
      */
+    @Suppress("DEPRECATION")
     @Test
     fun skipsAComponentCreatedFromInsideAnotherCreate() {
         val manifest = StartupManifest {
@@ -172,6 +174,7 @@ class StartupRuntimeTest {
     }
 
     /** Installing a second manifest adds to the first rather than replacing it. */
+    @Suppress("DEPRECATION")
     @Test
     fun composesSuccessiveInstalls() {
         Startup.install(

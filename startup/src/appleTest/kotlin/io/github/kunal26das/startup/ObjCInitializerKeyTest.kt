@@ -19,6 +19,7 @@ import platform.Foundation.NSDate
 class ObjCInitializerKeyTest {
 
     /** A class Kotlin did not declare has no key, and says so. */
+    @Suppress("DEPRECATION")
     @Test
     fun anObjectiveCClassThatKotlinDidNotDeclareIsRejected() {
         val failure = assertFailsWith<StartupException> { initializerKey(NSDate) }
