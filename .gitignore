@@ -1,0 +1,10 @@
+.DS_Store
+.gradle/
+.idea/
+.konan/
+.kotlin/
+build/
+captures/
+kotlin-js-store/
+local.properties
+node_modules/
