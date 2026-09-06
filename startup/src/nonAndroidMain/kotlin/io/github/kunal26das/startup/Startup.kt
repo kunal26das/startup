@@ -3,7 +3,7 @@ package io.github.kunal26das.startup
 /** Owns the process-wide [AppInitializer] on the platforms that have no AndroidX. */
 actual object Startup {
 
-    private val lock = StartupLock()
+    private val lock = StartupLock(guardsWaveTasks = false)
 
     private var instance: AppInitializer? = null
 
@@ -12,6 +12,7 @@ actual object Startup {
      * eagerly creates every component it marks as eager. This is the stand-in for
      * `InitializationProvider.onCreate`, which is what performs the same step on Android.
      */
+    @Throws(StartupException::class)
     actual fun install(context: Context, manifest: StartupManifest): AppInitializer {
         val appInitializer = getInstance(context)
         appInitializer.engine.install(manifest)
@@ -19,6 +20,7 @@ actual object Startup {
     }
 
     /** Composes [manifest] in, handing each wave to [runner] rather than to this thread. */
+    @Throws(StartupException::class)
     actual fun install(
         context: Context,
         manifest: StartupManifest,
@@ -30,6 +32,7 @@ actual object Startup {
     }
 
     /** The [AppInitializer] for this process, created on first use. */
+    @Throws(StartupException::class)
     actual fun getInstance(context: Context): AppInitializer = lock.withLock {
         instance ?: AppInitializer(context).also { instance = it }
     }

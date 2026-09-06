@@ -25,8 +25,15 @@ actual class InitializerKey<T : Any> @PublishedApi internal constructor(
      * The simple name of the wrapped class. Never `qualifiedName`: reading it is a
      * compile error on Kotlin/JS, and having the name here is what saves this library a
      * per-platform source set.
+     *
+     * A class with no simple name — an anonymous object, which is what an initializer
+     * built by a host and registered under [initializerKey] often is — falls back to the
+     * runtime's own rendering, trimmed of the decoration that would otherwise land in the
+     * middle of a diagnostic sentence.
      */
     override fun toString(): String = kClass.simpleName ?: kClass.toString()
+        .removePrefix("class ")
+        .substringBefore(" (Kotlin reflection is not available)")
 }
 
 /**

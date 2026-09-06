@@ -14,10 +14,17 @@ actual class AppInitializer internal constructor(context: Context) {
     internal val engine = StartupEngine(context)
 
     /** Creates [component] and everything it depends on, or returns what was created before. */
+    @Throws(StartupException::class)
     actual fun <T : Any> initializeComponent(component: InitializerKey<out Initializer<T>>): T =
         engine.initializeComponent(component)
 
     /** Whether the installed manifest marks [component] as eager. */
+    @Throws(StartupException::class)
     actual fun isEagerlyInitialized(component: AnyInitializerKey): Boolean =
         engine.isEager(component)
 }
+
+/** Creates [component] and everything it depends on, or returns what was created before. */
+@Throws(StartupException::class)
+actual fun AppInitializer.initializeComponentOrNull(component: AnyInitializerKey): Any? =
+    engine.initializeComponentOrNull(component)

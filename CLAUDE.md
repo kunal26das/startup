@@ -9,13 +9,28 @@ On the other ten targets it is a hand-written runtime whose order comes from Kah
 - **KDoc on every public declaration.**
 - **No inline `//` comments, no block comments, no commented-out code, anywhere.** Not in Kotlin,
   not in Gradle scripts, not in YAML, not in config files. KDoc is the only comment form allowed.
-- **One top-level declaration per Kotlin file, and the file name is the declaration name.** The only
-  exception is `InitializerKey.kt`, where the three `initializerKey` overloads live beside the class
-  they build: all of them must be top-level, because a Java class cannot satisfy an
-  `expect companion object`. They also have to stay in that one file: a non-`expect` function in the
-  `commonMain` copy would generate a second `InitializerKeyKt` JVM facade and collide with the
-  `androidMain` and `desktopMain` ones, which is why the instance overload is `expect`/`actual`
-  despite having one possible body.
+- **One top-level declaration per Kotlin file, and the file name is the declaration name.** A file
+  may carry a second top-level declaration only when the first cannot own it — a public extension on
+  a `typealias`'d Java type, or an internal helper whose `expect` declaration's contract is written
+  in terms of it. Four kinds of file qualify today:
+  - `InitializerKey.kt`, where the three `initializerKey` overloads live beside the class they
+    build: all of them must be top-level, because a Java class cannot satisfy an
+    `expect companion object`. They also have to stay in that one file: a non-`expect` function in
+    the `commonMain` copy would generate a second `InitializerKeyKt` JVM facade and collide with the
+    `androidMain` and `desktopMain` ones, which is why the instance overload is `expect`/`actual`
+    despite having one possible body.
+  - `AppInitializer.kt` in `commonMain`, `androidMain` and `nonAndroidMain`, for
+    `initializeComponentOrNull`. Same forcing: on Android `AppInitializer` is a `typealias` to a Java
+    class and cannot gain a member, so the read has to be an extension, and it has to be
+    `expect`/`actual` for the same JVM-facade reason.
+  - `nonAndroidMain/StartupLock.kt`, where `startupLockBarrier()` builds the one exception the lock
+    itself raises.
+  - `commonMain/CoroutineInitializer.kt`, where `COROUTINE_INITIALIZER_UNSUPPORTED` is the message
+    the `awaitBlocking` actuals on JS and Wasm refuse with. It is internal and it is the whole of
+    what those two actuals say, so the interface's file is where it belongs.
+  The same rule is why `awaitBlocking` sits in its own `AwaitBlocking.kt` rather than beside
+  `CoroutineInitializer`: the interface's file already generates a JVM facade for
+  `COROUTINE_INITIALIZER_UNSUPPORTED`, and a same-named actual file would collide with it.
 - No AI attribution in commits, pull requests or files.
 
 ## Layout
@@ -23,15 +38,26 @@ On the other ten targets it is a hand-written runtime whose order comes from Kah
 ```
 startup/                  the published library
   src/commonMain          the public API and StartupPlanner
-  src/androidMain         typealiases onto androidx.startup, and nothing else
+  src/androidMain         typealiases onto androidx.startup, plus what cannot be one: Startup,
+                          the initializerKey overloads, componentName, and the four 3.0.0 adds
+                          — initializeComponentOrNull, StartupWaveThread, StartupOnce and
+                          awaitBlocking
   src/nonAndroidMain      the runtime for the other ten targets
-  src/desktopMain         the JVM StartupLock
-  src/nativeMain          the Kotlin/Native StartupLock and its thread token
-  src/jsMain              the single-threaded StartupLock
-  src/wasmJsMain          the single-threaded StartupLock
+  src/desktopMain         the JVM StartupLock, StartupWaveThread, StartupOnce, awaitBlocking
+  src/nativeMain          the Kotlin/Native StartupLock, its thread token, StartupWaveThread,
+                          StartupOnce, startupYield's expect, awaitBlocking
+  src/appleMain           the sched_yield actual, and nothing else
+  src/linuxMain           the sched_yield actual, and nothing else
+  src/mingwMain           the SwitchToThread actual, and nothing else
+  src/jsMain              the single-threaded StartupLock, StartupWaveThread and StartupOnce,
+                          and the awaitBlocking that refuses
+  src/wasmJsMain          the single-threaded StartupLock, StartupWaveThread and StartupOnce,
+                          and the awaitBlocking that refuses
   src/commonTest          planner and manifest tests, run on all eleven targets
   src/nonAndroidTest      engine tests, run on the ten non-Android targets
-  src/desktopTest         the concurrency test, which needs real threads
+  src/desktopTest         the concurrency, wave-contract, barrier and coroutine tests, which
+                          need real threads; the wave-sibling refusal is in nonAndroidTest,
+                          because a same-thread runner needs none
   src/androidHostTest     the Android bytecode contract, asserted reflectively
 sample/                   not published; proves a consumer writes an initializer once
   src/commonMain          shared initializers, the two expect initializers, SampleReport
@@ -134,9 +160,11 @@ commonMain
     └── nativeMain
 ```
 
-`:startup` has no `appleMain`. It held only `initializerKey(objCClass)`, so removing that in 2.0.0
-emptied the source set and it was deleted; `:startup:compileAppleMainKotlinMetadata` is NO-SOURCE.
-`sample` still has one.
+`:startup` has an `appleMain`, `linuxMain` and `mingwMain` again as of 3.0.0. Each holds exactly one
+declaration, the `startupYield` actual — `sched_yield` on Apple and Linux, `SwitchToThread` on
+mingw — because the Kotlin/Native lock is a compare-and-set loop and there is no parking primitive
+every native target shares. They had been deleted in 2.0.0, when removing `initializerKey(objCClass)`
+emptied `appleMain`.
 
 `sample` adds one more edge on top of that, `consoleMain`, which `desktopMain`, `jsMain`,
 `wasmJsMain`, `macosMain`, `linuxMain` and `mingwMain` depend on and `iosMain` does not. A source
@@ -180,6 +208,22 @@ on its own. The Android drift check in particular will look worth reintroducing 
 problem it addressed is real and is now the consumer's, answered by a parity test of their own, which
 is what `sample`'s `AndroidManifestParityTest` and README.md's **Keep the two Android registries in
 step** demonstrate.
+
+3.0.0 adds four declarations with no counterpart, and each is here because the mirror is *broken*
+without it rather than because it is useful. `WaveRunner`/`StartupTask` and `CoroutineInitializer`
+are argued for under **Verified shapes** below. The other two:
+
+- `AppInitializer.initializeComponentOrNull(key)`. `initializerKey(instance)` returns an
+  `AnyInitializerKey`, which `initializeComponent` cannot take, and a `create` that returned null had
+  nothing the typed read could hand back. So the runtime-key path — the only one Swift and a
+  plugin host can use — could register a component and never read it, and a Swift initializer
+  returning `nil`, which the Objective-C export makes the natural thing to write, crashed the reader
+  with a `NullPointerException` raised inside the library. AndroidX has no counterpart because on
+  Android neither problem exists: a key is a `java.lang.Class` and `create` is `@NonNull`. This
+  declaration exists to make the other ten targets reach the behaviour Android already had.
+- `StartupTask`'s public constructor. 2.1.0's wave was `List<() -> Unit>`, which a host could
+  fabricate to test its own runner. Naming the component took that away; making the constructor
+  public gives it back. The engine never trusts a task it did not create.
 
 **What went with them, and what did not.** `AndroidManifestDriftTest` and `ObjCInitializerKeyTest`
 tested only removed API and are deleted. `StartupManifestTest` lost its two
@@ -310,7 +354,7 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   asserts the bytecode of both is unchanged: public no-argument constructor,
   `implements androidx.startup.Initializer`, AndroidX's own `dependencies()` signature. A test source
   set gets **no** metadata compilation — `ls startup/build/classes/kotlin/metadata` lists
-  `commonMain`, `nativeMain` and `nonAndroidMain` and nothing ending in `Test` — so
+  `appleMain`, `commonMain`, `nativeMain` and `nonAndroidMain` and nothing ending in `Test` — so
   those two files cannot say anything about the shape's portability, and for two rounds this file
   and README.md claimed a portability they never checked. `sample`'s `RuntimeInfoInitializer` is the
   pin that can: it is the redeclaring shape in a `commonMain` that `./gradlew build` really does
@@ -355,33 +399,79 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   the only configuration in this repository that matches what an application actually gets.
 - `compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }` is required for the
   `expect`/`actual` classes above.
-- No coroutines and no `runBlocking` **inside the library**: neither exists on Kotlin/JS or
-  Kotlin/Wasm, and both are first-class targets here. Execution is sequential on the calling thread
-  unless the caller supplies one. `StartupPlan.waves` exposes the Kahn levels, `waves.flatten() ==
-  order` is still its whole contract, and as of 2.1.0 it is also the unit
+- No coroutine **in the engine**: `runBlocking` exists on neither Kotlin/JS nor Kotlin/Wasm, and
+  both are first-class targets here. Execution is sequential on the calling thread unless the caller
+  supplies a runner. `StartupPlan.waves` exposes the Kahn levels, `waves.flatten() == order` is
+  still its whole contract, and as of 2.1.0 it is also the unit
   `Startup.install(context, manifest, runner)` hands to a `WaveRunner`. That is the seam this file
   spent three releases refusing, and it is only sound because of where it was put: the host runs the
-  wave, the library keeps the planning, ordering, cycle detection and the created components, and no
-  coroutine is linked into the artifact.
+  wave, and the library keeps the planning, ordering, cycle detection and the created components.
+  As of 3.0.0 the unit is a `StartupTask`, which names its component, because a runner that cannot
+  tell one task from another cannot give a component thread affinity, cannot trace one, and cannot
+  say which one failed.
   **The lock is still held across the whole install, so a task inside a runner may not call
-  `initializeComponent`** — it would block on a lock the installing thread still owns. That is the
-  original objection and it did not go away; it became a documented caller constraint. It also
-  means `sample`'s own manifest cannot be installed with a runner, because
+  `initializeComponent` from another thread** — there is no thread that could serve it. 3.0.0 makes
+  that a `StartupException` raised at once rather than a wait: `internal expect object
+  StartupWaveThread` is a thread-local flag `StartupTask.invoke` raises around the body, and
+  `StartupLock.withLock` fails on the contention path when it is set instead of parking on the JVM
+  or spinning a core on Native. The flag rather than a lock-wide barrier is the point: a thread that
+  is *not* running a task is waiting for something that really does arrive when the install ends,
+  and refusing it too would turn a correct call into a crash. A task **on the installing thread**
+  may still resolve anything an **earlier** wave created, because the lock is reentrant; the 2.x flat
+  prohibition was wrong about that half, and it is why `sample`'s own manifest —
   `NetworkInitializer`, `AnalyticsInitializer` and `CrashReportingInitializer` resolve each other
-  imperatively, which is the AndroidX-documented pattern. Declaring the edge in `dependencies()` is
-  what makes a component safe to run in a wave, because that is what puts its dependency in an
-  earlier one. On Android the runner is ignored: AndroidX owns creation and offers no seam, so a
-  runner is a performance decision on the other ten targets and never a correctness one. Wish
-  reported the 1.x migration costing it the concurrent startup its hand-rolled runtime had; that is
-  the cost this closes, and README.md's **Running a wave concurrently** is the consumer-facing
-  version.
+  imperatively, the AndroidX-documented pattern — can be installed with a same-thread runner after
+  all. It works there because those components *also* declare the edges they resolve, which is what
+  puts every dependency in a strictly earlier wave than the component reading it — not one component
+  per wave: `CrashReportingInitializer` and `NetworkInitializer` share the second level, declaring
+  nothing of each other. `:sample`'s `SampleWavePlanTest` checks that separation on a
+  `StartupPlanner` plan, which is a pure function of the manifest and so says the same thing whatever
+  order the suite runs in; an install there would prove nothing, because `Startup` is a process
+  singleton and the graph is already built by the time any one test runs. The runner behaviour itself
+  is pinned in `:startup`, against an isolated engine, by `WaveSiblingTest`. What the installing thread may **not** ask for is a component of
+  the wave in flight. Nothing a wave creates is written back until `WaveRunner.run` returns, so a
+  sibling is neither created nor creatable, and two components share a wave precisely when neither
+  declares the other — there is no cycle there to report, and reporting one printed
+  `Alpha -> Sibling -> Alpha` for a graph with no edges at all. `StartupEngine.inFlight` is the split:
+  a `creating` entry that belongs to the wave being run is refused by name, and every other one is
+  still a real cycle rendered as a real path. A component asking for *itself* inside a wave goes
+  down the first arm too, and the refusal names that case in so many words. It really is a cycle,
+  but `reentrantCycle` cannot draw it here: the path it renders is stitched from `creating`, which
+  under a runner holds the whole wave rather than a nesting stack, so a self-call in a wave of two
+  printed `Self -> Sibling -> Self`. Without a runner it is still `Cycle detected: Self -> Self`,
+  and `StartupRuntimeTest.rejectsAComponentThatAsksForItself` pins that. Declaring the edge in `dependencies()` is what makes a
+  component safe to run in a wave on any thread. On Android the runner is ignored: AndroidX
+  owns creation and offers no seam, so a runner is a performance decision on the other ten targets
+  and never a correctness one. Wish reported the 1.x migration costing it the concurrent startup its
+  hand-rolled runtime had; that is the cost this closes, and README.md's **Running a wave
+  concurrently** is the consumer-facing version.
+- **`CoroutineInitializer` is the one coroutine in the artifact**, added in 3.0.0 against this
+  file's own three-release stance, because the stance was answering the wrong question. `suspend` is
+  a language feature on all eleven targets; only *blocking a thread to await one* is missing on JS
+  and Wasm. Wish's real initializers are `suspend (WishContext) -> T` smuggled through a
+  fire-and-forget `GlobalScope.launch`, so its graph ordered the launches and not the completions —
+  which is to say its dependency edges did not wait, which is to say they were not edges. The bridge
+  is `internal expect fun <T> awaitBlocking(block: suspend () -> T): T`: `runBlocking` on Android,
+  JVM and Native, and a `StartupException` on JS and Wasm, exactly the shape `StartupLock` already
+  uses for a capability nine targets have and two do not. It costs
+  `kotlinx-coroutines-core` in the Android, JVM and native artifacts and nothing in the JS and Wasm
+  ones. `CoroutineInitializer<T : Any>` bounds `T` because `androidx.startup.Initializer` declares
+  `create` `@NonNull`, and without the bound `compileAndroidMain` rejects the override.
 - `internal expect class StartupLock` in `nonAndroidMain`, with four actuals: `ReentrantLock` on the
   JVM, a reentrant spin lock over `kotlin.concurrent.AtomicReference` plus a `@ThreadLocal` token on
   Native, and a direct call on JS and Wasm, which are single-threaded. AndroidX serializes every
   initialization inside `synchronized (sLock)`, so shared code cannot be unsynchronized off Android:
   eight threads asking for two components created them five to eight times without it, and
   intermittently reported a cycle on a graph with no edges.
-- No `atomicfu` and no third-party dependency of any kind off Android.
+- No `atomicfu`, and exactly one third-party dependency off Android: `kotlinx-coroutines-core`,
+  which 3.0.0 adds to `desktopMain` and `nativeMain` for `awaitBlocking` and to `androidMain`
+  beside `androidx.startup`. It reaches no public signature — `suspend` is a language feature, so a
+  consumer implements `CoroutineInitializer` without declaring coroutines itself — which is why
+  `implementation` rather than `api` is right here and `api` is right for `androidx.startup`. The
+  JS and Wasm artifacts have no dependency at all, because their `awaitBlocking` only throws.
+  Verified by publishing to `mavenLocal` and building a consumer that declares nothing but this
+  library. Nothing else earns a place: a second one has to close a hole in the mirror the way this
+  one does, not merely be convenient.
 - `jvmToolchain(21)` pins the compiler, and `jvmTarget` is `JVM_11` on both the `android` and the
   `desktop` target. Every registration function is `inline`, and Kotlin refuses to inline bytecode
   built for a newer JVM target than the caller's, so publishing Java 21 bytecode made the library
@@ -419,7 +509,7 @@ failing first.
 ## The planner
 
 `StartupPlanner` lives in `commonMain` as the single copy for all eleven targets, so a regression in
-the ordering rules cannot hide on one platform. Five properties matter and each has a test:
+the ordering rules cannot hide on one platform. Seven properties matter and each has a test:
 
 1. Kahn with an in-degree map and a FIFO ready queue seeded in declaration order. Every map and set
    is insertion ordered, so the plan is a pure function of declaration order and dependency order.
@@ -576,6 +666,12 @@ on Linux and Windows.
 
 Adding a web executable pulls `webpack-dev-server` into the yarn workspace, so the first build after
 that change fails `kotlinStoreYarnLock` until `./gradlew kotlinUpgradeYarnLock` is run.
+
+`gradle.properties` sets `kotlin.incremental.wasm=false`, and the reason cannot live beside it
+because the house style bans comments in config files. Kotlin 2.4.10's Wasm incremental compilation
+crashes with `NoSuchElementException: Key ic#NN:kotlin.text/... is missing in the map` whenever an
+edit changes which stdlib functions a shared source set references, reproduced four times out of
+four. Remove the line when that is fixed upstream, not before.
 
 An Android app targeting SDK 35 or newer is edge to edge, and a `setContentView` root that does not
 handle insets is drawn under the status bar and the action bar. `androidApp` uses a `NoActionBar`

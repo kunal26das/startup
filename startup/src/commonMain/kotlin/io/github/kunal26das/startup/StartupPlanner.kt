@@ -36,6 +36,7 @@ object StartupPlanner {
      * starting at the component the walk re-entered, both in the message and in
      * [StartupException.components].
      */
+    @Throws(StartupException::class)
     fun plan(
         manifest: StartupManifest,
         roots: List<AnyInitializerKey>,
@@ -126,6 +127,7 @@ object StartupPlanner {
      *
      * @throws StartupException with the same diagnostics [plan] would raise.
      */
+    @Throws(StartupException::class)
     fun validate(manifest: StartupManifest) {
         plan(manifest, manifest.components, emptySet())
     }

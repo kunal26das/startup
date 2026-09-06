@@ -38,10 +38,11 @@ expect object Startup {
      * earlier waves, are handed over together so [runner] may run them at the same time.
      *
      * On Android [runner] is ignored: `androidx.startup` creates each component itself,
-     * depth first on the calling thread, and offers no seam to change that. A runner is
-     * therefore a performance decision on the other ten targets and never a correctness
-     * one, so an initializer that must run before another still has to say so in
-     * [Initializer.dependencies]. See [WaveRunner] for what a task may not do.
+     * depth first on the calling thread, and offers no seam to change that. For ordinary
+     * initializers a runner is therefore a performance decision on the other ten targets
+     * and never a correctness one, so one that must run before another still has to say so
+     * in [Initializer.dependencies]. For a [CoroutineInitializer] it is a correctness
+     * decision, because the runner picks the thread `create` blocks. See [WaveRunner] for what a task may not do.
      */
     fun install(
         context: Context,

@@ -26,11 +26,15 @@ CI has no x86_64 macOS runner, so a green build is not evidence that their test 
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.kunal26das:startup:2.1.0")
+            implementation("io.github.kunal26das:startup:3.0.0")
         }
     }
 }
 ```
+
+Use `api` rather than `implementation` if an iOS host has to see these types, because a framework
+can only `export` a dependency its source set declares with `api`; see **From Swift and
+Objective-C** below.
 
 The Android artifact depends on `androidx.startup:startup-runtime` with `api` scope, so an Android
 consumer can implement `Initializer` without declaring AndroidX itself, and it publishes the same
@@ -371,10 +375,18 @@ Startup.install(DefaultContext, manifest)
 Initialization runs sequentially on the calling thread, and every entry point is serialized behind
 one reentrant lock, which is what AndroidX gets from `synchronized (sLock)`: a component is created
 exactly once however many threads ask for it, and an `Initializer.create` may call back into
-`initializeComponent` without deadlocking. There are no coroutines anywhere in the library, because
-`runBlocking` does not exist on Kotlin/JS or Kotlin/Wasm. `StartupPlan.waves` exposes the Kahn
-levels as data, and `Startup.install(context, manifest, runner)` hands each level to a `WaveRunner`
-of your choosing — see **Running a wave concurrently** below for what a task may not do.
+`initializeComponent` without deadlocking. The engine holds no coroutine of its own, because
+`runBlocking` does not exist on Kotlin/JS or Kotlin/Wasm; a component whose own work suspends says
+so with `CoroutineInitializer`, see **Initializing something that suspends** below.
+`StartupPlan.waves` exposes the Kahn levels as data, and
+`Startup.install(context, manifest, runner)` hands each level to a `WaveRunner` of your choosing —
+see **Running a wave concurrently** below for what a task may not do.
+
+`AppInitializer.initializeComponentOrNull(key)` is the read for a component whose key is an
+`AnyInitializerKey` — the element type of `dependencies()`, what `initializerKey(initializer)`
+returns, and the only key a host that discovered an initializer at run time can build — and for one
+whose `create` returned null. `initializeComponent` takes neither: its key is
+`InitializerKey<out Initializer<T>>` and its `T` is bound to `Any`.
 
 `AppInitializer` is the same two members here that it is on Android. Until 1.1.0 it carried three
 more off Android — `isInitialized(component)`, `initializationOrder()` and `manifest()` — and
@@ -413,12 +425,12 @@ snippets in this section name types that do not exist:
 ```kotlin
 kotlin {
     sourceSets.commonMain.dependencies {
-        api("io.github.kunal26das:startup:2.1.0")
+        api("io.github.kunal26das:startup:3.0.0")
     }
     listOf(iosArm64(), iosSimulatorArm64(), iosX64()).forEach {
         it.binaries.framework {
             baseName = "Shared"
-            export("io.github.kunal26das:startup:2.1.0")
+            export("io.github.kunal26das:startup:3.0.0")
         }
     }
 }
@@ -434,7 +446,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 kotlin {
     targets.withType<KotlinNativeTarget>().configureEach {
         binaries.withType<Framework>().configureEach {
-            export("io.github.kunal26das:startup:2.1.0")
+            export("io.github.kunal26das:startup:3.0.0")
         }
     }
 }
@@ -444,7 +456,7 @@ kotlin {
 the framework are not specified as API dependencies of a corresponding source set*.
 
 You may already have it without writing the line. A framework with `transitiveExport = true` that
-exports a module which declares `api("io.github.kunal26das:startup:2.1.0")` exports this library too,
+exports a module which declares `api("io.github.kunal26das:startup:3.0.0")` exports this library too,
 which is what a convention plugin that exports a shared `core` module typically produces. Check the
 generated header for `swift_name("InitializerKeyKt")` before adding anything: if it is there, the
 export is already in place.
@@ -481,12 +493,16 @@ that boundary:
   exported and do what they say:
 
 ```swift
-let manifest = StartupManifest.companion.invoke { builder in
-    let lifecycle = ViewControllerLifecycleInitializer()
-    builder.metaData(component: InitializerKeyKt.initializerKey(initializer: lifecycle)) { lifecycle }
+func boot(_ application: UIApplication) throws {
+    let manifest = StartupManifest.companion.invoke { builder in
+        let lifecycle = ViewControllerLifecycleInitializer()
+        builder.metaData(component: InitializerKeyKt.initializerKey(initializer: lifecycle)) { lifecycle }
+    }
+    try Startup.shared.install(context: DefaultContext.shared, manifest: manifest)
 }
-Startup.shared.install(context: DefaultContext.shared, manifest: manifest)
 ```
+
+`install` is `try` from 3.0.0; see **Every entry point carries `@Throws`** below.
 
 **The Swift name of `Context` is `StartupContext`.** A Kotlin `typealias` does not survive the
 Objective-C export, so the class itself carries `@ObjCName("StartupContext")`. That keeps the Swift
@@ -522,13 +538,47 @@ one whose constructor has a side effect, and such an initializer should not have
 real for you, hoist the keys into a `let` computed once rather than rebuilding them per
 `dependencies()` call. See **Upgrading from 1.x** below.
 
+**Every entry point carries `@Throws(StartupException::class)`.** Without it Kotlin/Native does not
+propagate an exception to Swift as an `NSError`: it prints *Function doesn't have or inherit
+@Throws annotation and thus exception isn't propagated* and terminates the process, so a diagnosable
+launch failure arrived as an abort. `Startup.install`, `Startup.getInstance`,
+`AppInitializer.initializeComponent`, `AppInitializer.initializeComponentOrNull`,
+`AppInitializer.isEagerlyInitialized`, `StartupTask.invoke`, `StartupPlanner.plan` and
+`StartupPlanner.validate` are all `try` in Swift now. `:startup:checkObjCExport` asserts the
+`NSError` parameter on every one of them, so a dropped annotation fails the build rather than the
+app.
+
+**A Swift `WaveRunner` has one spelling that compiles**, because the task list crosses as an array
+of Objective-C objects:
+
+```swift
+final class ConcurrentWaveRunner: NSObject, WaveRunner {
+    func run(wave: [StartupTask]) {
+        DispatchQueue.concurrentPerform(iterations: wave.count) { index in
+            do { try wave[index].invoke() } catch { }
+        }
+    }
+}
+```
+
+**A Swift runner cannot rethrow, and does not have to.** `run` is exported without an error
+parameter, so a `throws` conformance does not compile — Swift reports *candidate throws, but
+protocol does not allow it*. Catching and dropping is correct here: the task recorded the failure
+before it reached you, and the engine re-raises it as a `StartupException` naming the component once
+`run` returns. That is why the contract below says a runner must let a failure out *where the
+language allows*.
+
+`concurrentPerform` runs some iterations on the calling thread and some on workers, which is worth
+knowing: an iteration that lands on the calling thread may resolve another component and one that
+lands on a worker may not, so a runner written this way must not touch `AppInitializer` at all.
+
 `:startup`'s `checkObjCExport` task links `Startup.framework` and asserts on the generated header,
 and `:sample`'s `checkConsumerObjCExport` does the same for the two frameworks a *consumer* gets, so
 neither the export shape nor the recipe above can regress unnoticed.
 
 ## Where the two runtimes differ
 
-Everything in the API mapping below behaves the same on all eleven targets. Five things do not, and
+Everything in the API mapping below behaves the same on all eleven targets. Six things do not, and
 the first four are cases where code written and tested on Android would misbehave elsewhere.
 
 - **The order of independent components.** Both runtimes always create a dependency before the
@@ -549,6 +599,13 @@ the first four are cases where code written and tested on Android would misbehav
   `Startup.install` on Android never calls a factory, so there it fires only under
   `StartupPlanner.validate(manifest)`. An Android app that never validates keeps running, on the
   class AndroidX reflected rather than the one the factory would have built.
+- **A component that produces nothing.** Off Android `Initializer<T>` leaves `T` unbounded and the
+  Objective-C export gives a Swift author `Any?` to return, so `create` may hand back null; the
+  engine stores it, `initializeComponentOrNull` returns it, and `initializeComponent` names the
+  component rather than failing a cast. On Android `androidx.startup.Initializer.create` is
+  `@NonNull`, so such an initializer does not compile at all — an Android-compatible component with
+  no product is an `Initializer<Unit>` that returns `Unit`. It is the same constraint that bounds
+  `CoroutineInitializer<T : Any>`.
 - **Which registry decides.** Off Android the `StartupManifest` is the whole registry. On Android
   it is the AndroidManifest, and the factories in the `StartupManifest` are never called. That is
   the one failure mode adopting this library adds. The AndroidManifest is the source of truth there
@@ -563,25 +620,78 @@ By default both runtimes create one component at a time on the calling thread. E
 
 ```kotlin
 Startup.install(context, manifest) { wave ->
-    runBlocking { coroutineScope { wave.map { async { it() } }.awaitAll() } }
+    runBlocking { coroutineScope { wave.map { async(startupDispatcher) { it() } }.awaitAll() } }
 }
 ```
 
+**The dispatcher there is the whole point.** A task is an ordinary blocking call rather than a
+suspending one, so `async { }` without a dispatcher inherits `runBlocking`'s single-threaded event
+loop and runs the wave one task after another on the calling thread — which is exactly what
+`Startup.install(context, manifest)` already does, at the cost of a runner that looks concurrent.
+
+Give it a dispatcher of its own rather than reaching for `Dispatchers.Default`. A task blocks the
+thread it runs on for as long as its component takes, so a wave of `CoroutineInitializer`s
+dispatched onto the pool their own `createAsync` resumes on starves that pool and hangs the install;
+see **Initializing something that suspends**. `Dispatchers.IO` is elastic on both the JVM and
+Kotlin/Native and is the safe default here.
+
 The library keeps the ordering, the cycle detection, the deduplication and the created components;
 the concurrency is yours. `install` waits for each wave before planning the next, so `run` **must**
-invoke every task exactly once and must not return until all of them have finished.
+invoke every task exactly once, must let a task's failure out rather than swallowing it, and must
+not return until all of them have finished. A second invocation of a task is refused at the call, by
+`StartupTask.invoke` itself; the other two are checked once `run` returns. Either way the violation
+is a `StartupException` naming the components it applies to rather than a component quietly filed as
+null.
 
-**A task must not call `AppInitializer.initializeComponent`.** The lock is held across the whole
-install, so a task on another thread would block on a lock the installing thread still owns. That
-rules out the pattern AndroidX documents and every imperative example on this page uses: a manifest
-whose components resolve each other from inside `create` has to be installed without a runner.
-Declaring the edge in `dependencies()` is what makes it safe, because that is what puts the
-dependency in an earlier wave.
+**A task is a `StartupTask`, and it names the component it will create.** `task.component` is the
+key and `task.toString()` is the component's name, so a runner can route a wave rather than merely
+run it — the one component that has to stay on the calling thread dispatched differently from the
+rest — and can attribute a slow or failed wave to a component. It is also where a host hangs its own
+tracing, because the engine has no hook of its own:
+
+```kotlin
+Startup.install(context, manifest) { wave ->
+    runBlocking {
+        coroutineScope {
+            wave.map { task ->
+                async(if (task.component == mainThreadOnly) Dispatchers.Main else Dispatchers.IO) {
+                    trace(task.toString()) { task() }
+                }
+            }.awaitAll()
+        }
+    }
+}
+```
+
+**A task may call `AppInitializer.initializeComponent` only from the thread that called `install`,
+and only for what an earlier wave already created.** The lock is held across the whole install and it
+is reentrant, so a runner that stays on the calling thread — which is every runner on Kotlin/JS and
+Kotlin/Wasm — may read a component an earlier wave built. From any other thread that call can never
+be served, and it now fails immediately with a `StartupException` saying so rather than waiting on a
+lock the installing thread cannot release until `run` returns.
+
+A component of the wave being run right now is refused too, on every thread. Nothing a wave creates
+is written back until `run` returns, so a sibling is neither created nor creatable from inside one —
+and it is refused by name rather than reported as a cycle, because two components share a wave
+precisely when neither declares the other, so there is no cycle to draw. A component that asks for
+*itself* inside a wave gets the same refusal, which says so; without a runner that one is still
+reported as the cycle it is. Declaring the edge in
+`dependencies()` is what makes the call safe from anywhere, because that is what puts the dependency
+in a strictly earlier wave. That is what makes `sample`'s own manifest safe under a runner:
+`NetworkInitializer` and `AnalyticsInitializer` resolve what they need imperatively *and* declare the
+same edges, which is the AndroidX-documented pattern, so each of them only ever reads back a
+component an earlier wave already built.
 
 On Android the runner is ignored — `androidx.startup` creates each component itself, depth first
-on the calling thread, and offers no seam to change it. A runner is therefore a performance decision on
-the other ten targets and never a correctness one, so anything that must run before something else
-still has to say so in `dependencies()`.
+on the calling thread, and offers no seam to change it. For ordinary `Initializer`s a runner is
+therefore a performance decision on the other ten targets and never a correctness one, so anything
+that must run before something else still has to say so in `dependencies()`.
+
+**For a `CoroutineInitializer` it is a correctness decision.** `create` blocks the thread it is
+called on until `createAsync` finishes, and the runner is what picks that thread: on Android it is
+always `InitializationProvider`'s, which is the main thread, while off Android a runner can move it
+to a worker or leave it on whoever called `install`. Which thread that is decides whether the
+component's own dispatching can make progress — see **Initializing something that suspends**.
 
 You can also skip `AppInitializer` for the concurrent part entirely: plan with
 `StartupPlanner.plan(manifest, roots, satisfied)`, read `plan.waves`, construct your own initializers
@@ -589,6 +699,58 @@ You can also skip `AppInitializer` for the concurrent part entirely: plan with
 yourself. That is a fork in the road rather than a seam, and it is worth measuring first: an
 initializer that hands its work to a background scheduler and returns immediately costs the same
 either way.
+
+### Initializing something that suspends
+
+The graph's promise is that a dependency is *created* before the component that declares it. For a
+component whose real work is a `suspend` call — which is nearly every mobile SDK — a plain
+`Initializer` can only keep half of it: `create` has nowhere to await, so the idiomatic escape is to
+launch the work and return, and the graph then orders the launches rather than the completions. A
+dependency edge that does not wait is not a dependency edge.
+
+`CoroutineInitializer` is where a component says its work suspends:
+
+```kotlin
+class FirebaseInitializer : CoroutineInitializer<Unit> {
+    override suspend fun createAsync(context: StartupContext) = Firebase.start(context)
+}
+```
+
+`create` is inherited and blocks the calling thread until `createAsync` returns, so anything
+declaring this component in `dependencies()` starts after it has finished rather than after it has
+begun. Four consequences follow, and every one of them is yours to accept:
+
+- **It blocks.** On Android that thread is whichever one `InitializationProvider` runs on, which is
+  the main thread; elsewhere it is whoever called `Startup.install`, unless a `WaveRunner` moved the
+  wave. A component that must not block startup should still launch and return, and say so by
+  staying an ordinary `Initializer`.
+- **It must not need the thread it is blocking.** A `createAsync` that dispatches to the main
+  dispatcher, from the main thread, deadlocks. That is the ordinary `runBlocking` hazard and this
+  type does not change it.
+- **It must not be dispatched onto the pool it will resume on.** This is the same hazard one step
+  out, and it is the one a runner walks into. Each blocked `create` holds a worker of the pool the
+  runner sent it to; if `createAsync` then needs a worker of that same pool to resume, a wave with
+  as many such components as the pool has parallelism starves. Measured: twenty components whose
+  `createAsync` does `withContext(Dispatchers.Default)`, run by a `Dispatchers.Default` runner on an
+  18-core machine, entered 18 bodies, resumed none, and never returned. Three of the same components
+  finish; so do twenty that only `delay`. Give the runner a dispatcher the components do not use.
+- **The thread guard does not reach past `createAsync`.** A wave task that calls
+  `AppInitializer.initializeComponent` is refused at once, but only on the thread the task body runs
+  on. `createAsync` switching dispatchers moves the call to a thread the guard does not know about,
+  where it waits for a lock the install cannot release — with or without a runner. Declare the edge
+  in `dependencies()`; resolving a component from inside `createAsync` is not supported.
+
+**`CoroutineInitializer` is a Kotlin-side type.** Kotlin interface default bodies do not become
+Objective-C protocol defaults, so a Swift class conforming to it inherits nothing and must write the
+blocking `create(context:)` itself. A Swift initializer that has to await should implement
+`Initializer` directly and do its own waiting.
+
+`CoroutineInitializer<T : Any>` bounds `T` to `Any`, because `androidx.startup.Initializer` declares
+`create` `@NonNull` and this interface implements it on Android like any other.
+
+Kotlin/JS and Kotlin/Wasm have one thread and no way to park it, so there is nothing for `create` to
+block and it throws a `StartupException` that says exactly that. Those two targets run every
+ordinary `Initializer` as before; it is only the blocking bridge that has nowhere to stand.
 
 ## API mapping
 
@@ -609,6 +771,9 @@ either way.
 | `tools:node="remove"`                                 | `StartupManifest { remove<T>() }`                   | still the manifest             |
 | `InitializationProvider.onCreate()`                   | `Startup.install(context, manifest)`                | eagerly initializes            |
 | no equivalent                                         | `Startup.install(context, manifest, runner)`        | runner ignored                 |
+| no equivalent                                         | `WaveRunner`, `StartupTask`                         | never called                   |
+| no equivalent                                         | `AppInitializer.initializeComponentOrNull(key)`     | delegates; null not expressible|
+| no equivalent                                         | `CoroutineInitializer<T : Any>`                     | blocks the provider's thread   |
 | `androidx.startup.StartupException`                   | `StartupException`                                  | **not** a `typealias`          |
 
 `StartupException` is deliberately our own type. AndroidX annotates its exception
@@ -648,6 +813,45 @@ included: `Startup.install` never calls a factory there, so it does not surface 
 which run each wave of the plan however the host wants rather than on the calling thread; see
 **Running a wave concurrently**. It is ignored on Android, and nothing else published in 2.0.0
 changed.
+
+## Upgrading from 2.x
+
+**3.0.0 changes what a `WaveRunner` receives.** `run(wave: List<() -> Unit>)` is now
+`run(wave: List<StartupTask>)`. A task is still invoked the same way — `it()` — so a runner written
+as `wave.map { async { it() } }` needs no edit; one that named the type of its parameter does. What
+the change buys is that a task now names its component, which is what makes routing, tracing and an
+attributable failure possible at all.
+
+**3.0.0 enforces the `WaveRunner` contract it always documented.** A runner that runs a task twice
+is refused at the second call; one that skips a task or catches a task's failure and returns anyway
+is a `StartupException` naming the components once `run` returns, instead of a component filed as
+null that fails much later somewhere else. A wave that
+fails now also keeps the components that succeeded beside the failure, which is what the sequential
+path always did.
+
+**3.0.0 fails fast instead of waiting for a lock that cannot be released.** A wave task that calls
+`AppInitializer.initializeComponent` from a thread other than the installing one now throws
+immediately. It used to park on the JVM and spin without yielding on Kotlin/Native, where it cost a
+core for as long as the install ran and never ended. A task on the installing thread still works for
+anything an earlier wave created, as it always did — the flat prohibition in the 2.x README was
+wrong about that half — but not for a component of the wave in flight, which is refused by name. A
+thread that is not running a task is unaffected: its wait for the install to finish really does end,
+so it still waits.
+
+`StartupTask`'s constructor is public, so a runner can still be exercised against a wave the test
+built rather than only through `Startup.install` with a real manifest.
+
+**3.0.0 adds `AppInitializer.initializeComponentOrNull(key)`**, the read for an `AnyInitializerKey`
+and for a component whose `create` returned null. Both were previously unreadable: the key type did
+not fit `initializeComponent`, and a null product failed its cast with a bare
+`NullPointerException` raised inside the library. That failure is now a `StartupException` naming
+the component.
+
+**3.0.0 adds `CoroutineInitializer`**, and with it a dependency on `kotlinx-coroutines-core` for
+the Android, JVM and native artifacts. See **Initializing something that suspends**.
+
+**3.0.0 annotates the public API with `@Throws(StartupException::class)`**, which is source-breaking
+for Swift: a call that could fail now needs `try`. Kotlin callers are unaffected.
 
 ## Upgrading from 1.x
 

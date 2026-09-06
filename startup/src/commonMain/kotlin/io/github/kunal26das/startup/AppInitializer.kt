@@ -38,3 +38,19 @@ expect class AppInitializer {
      */
     fun isEagerlyInitialized(component: AnyInitializerKey): Boolean
 }
+
+/**
+ * [AppInitializer.initializeComponent] for a key whose component type is not known, and
+ * for a component whose product may be absent.
+ *
+ * [AnyInitializerKey] is the element type of [Initializer.dependencies] and the type
+ * [initializerKey] returns for an instance, so it is the only key a host that discovered
+ * an initializer at run time — or wrote one in Swift — can build. It is not assignable to
+ * the `InitializerKey<out Initializer<T>>` the typed read wants, which left that path able
+ * to register a component and never to read it back.
+ *
+ * The return type is nullable for the same reason. A `create` may return null, which the
+ * Objective-C export makes the natural thing for a Swift initializer to do, and the typed
+ * read cannot represent it.
+ */
+expect fun AppInitializer.initializeComponentOrNull(component: AnyInitializerKey): Any?

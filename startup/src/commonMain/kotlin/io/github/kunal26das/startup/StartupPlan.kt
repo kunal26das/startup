@@ -12,11 +12,15 @@ package io.github.kunal26das.startup
  * component at a time on the calling thread.
  *
  * Reading it is also the way to run the graph entirely outside this library: construct
- * your own initializers off this grouping and hold the results yourself. Either way the
- * one rule is that a component running in a wave must not call back into
- * [AppInitializer.initializeComponent], which is serialized behind a lock the installing
- * thread still holds. Declare what it needs in [Initializer.dependencies] instead, which
- * is what puts it in a later wave.
+ * your own initializers off this grouping and hold the results yourself. Handing the waves
+ * to a [WaveRunner] instead carries one rule, and it is narrower than the flat prohibition
+ * 2.x documented. A task may call back into [AppInitializer.initializeComponent] from the
+ * thread that called `Startup.install`, for anything an earlier wave already created. It may
+ * not from any other thread, where the lock it would wait for is held until the install ends,
+ * and it may not for a component of the wave in flight, which is not written back until
+ * [WaveRunner.run] returns. Declaring what a component needs in [Initializer.dependencies] is
+ * what puts that dependency in an earlier wave, and that is what makes the call safe from
+ * anywhere.
  */
 class StartupPlan internal constructor(
     val order: List<AnyInitializerKey>,

@@ -10,7 +10,7 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-val artifactVersion = "2.1.0"
+val artifactVersion = "3.0.0"
 val androidMinSdk = 21
 val androidxStartupMinSdk = 21
 val androidxStartupMinCompileSdk = 34
@@ -109,6 +109,13 @@ kotlin {
         }
         androidMain.dependencies {
             api(libs.androidx.startup)
+            implementation(libs.kotlinx.coroutines.core)
+        }
+        getByName("desktopMain").dependencies {
+            implementation(libs.kotlinx.coroutines.core)
+        }
+        getByName("nativeMain").dependencies {
+            implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -143,7 +150,25 @@ val checkObjCExport = tasks.register("checkObjCExport") {
         ).filter(header::contains)
         val aliased = listOf(
             "swift_name(\"StartupContext\")",
+            "swift_name(\"StartupTask\")",
+            "swift_name(\"initializeComponentOrNull(component:)\")",
         ).filterNot(header::contains)
+        val untyped = listOf(
+            "StartupStartupTask *> *)wave",
+        ).filterNot(header::contains)
+        val unthrowing = listOf(
+            "swift_name(\"install(context:manifest:)\")",
+            "swift_name(\"install(context:manifest:runner:)\")",
+            "swift_name(\"getInstance(context:)\")",
+            "swift_name(\"initializeComponent(component:)\")",
+            "swift_name(\"initializeComponentOrNull(component:)\")",
+            "swift_name(\"isEagerlyInitialized(component:)\")",
+            "swift_name(\"invoke()\")",
+            "swift_name(\"plan(manifest:roots:satisfied:)\")",
+            "swift_name(\"validate(manifest:)\")",
+        ).filterNot { name ->
+            header.lineSequence().any { it.contains(name) && it.contains("(NSError") }
+        }
         val failures = erased.map {
             "$it is exported with its reified type argument erased, so every Swift call site names the same component."
         } + callable.map {
@@ -151,7 +176,11 @@ val checkObjCExport = tasks.register("checkObjCExport") {
         } + colliding.map {
             "$it is exported, and a bare Context collides with UIViewControllerRepresentable.Context in every Compose Multiplatform host."
         } + aliased.map {
-            "$it is missing, so the exported name no longer matches the StartupContext alias this library tells Kotlin authors to use."
+            "$it is missing, so a name this library documents for Swift is not in the header."
+        } + untyped.map {
+            "$it is missing, so WaveRunner no longer hands Swift tasks it can tell apart."
+        } + unthrowing.map {
+            "$it carries no NSError parameter, so a StartupException terminates the process instead of reaching a Swift catch."
         }
         outputs.files.singleFile.writeText(failures.joinToString("\n").ifEmpty { "ok" })
         check(failures.isEmpty()) {
