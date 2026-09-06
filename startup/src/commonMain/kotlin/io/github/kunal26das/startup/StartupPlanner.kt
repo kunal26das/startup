@@ -26,14 +26,27 @@ object StartupPlanner {
      * emitted order is a pure function of declaration order and dependency order: the
      * same manifest always plans the same way.
      *
-     * @throws StartupException if a component is not registered, or if the graph has a
-     * cycle. A cycle is reported as a path starting at the component the walk re-entered,
-     * both in the message and in [StartupException.components].
+     * Reading a component's dependencies means having the component, so this constructs
+     * every initializer it reaches by calling its factory, on every target including
+     * Android. It never calls [Initializer.create].
+     *
+     * @throws StartupException if a component is not registered, if it is registered but
+     * hidden by [StartupManifestBuilder.remove], if its factory builds a class other than
+     * the one its key names, or if the graph has a cycle. A cycle is reported as a path
+     * starting at the component the walk re-entered, both in the message and in
+     * [StartupException.components].
      */
     fun plan(
         manifest: StartupManifest,
         roots: List<AnyInitializerKey>,
         satisfied: Set<AnyInitializerKey>,
+    ): StartupPlan = plan(manifest, roots, satisfied, LinkedHashMap())
+
+    internal fun plan(
+        manifest: StartupManifest,
+        roots: List<AnyInitializerKey>,
+        satisfied: Set<AnyInitializerKey>,
+        instances: MutableMap<AnyInitializerKey, Initializer<*>>,
     ): StartupPlan {
         val pending = LinkedHashSet<AnyInitializerKey>()
         val edges = LinkedHashMap<AnyInitializerKey, List<AnyInitializerKey>>()
@@ -45,7 +58,7 @@ object StartupPlanner {
         }
         while (queue.isNotEmpty()) {
             val component = queue.removeFirst()
-            val dependencies = manifest.dependenciesOf(component).distinct()
+            val dependencies = manifest.dependenciesOf(component, instances).distinct()
             edges[component] = dependencies
             for (dependency in dependencies) {
                 if (dependency in satisfied) continue
@@ -98,12 +111,18 @@ object StartupPlanner {
             val cycle = findCycle(residual, edges)
             throw StartupException(cycleMessage(cycle), null, cycle)
         }
-        return StartupPlan(order, waves)
+        return StartupPlan(order, waves, edges)
     }
 
     /**
      * Checks that every component in [manifest] resolves and that the whole graph is
-     * acyclic, without creating anything. Useful as a test or as a debug-build assertion.
+     * acyclic, without calling [Initializer.create]. Useful as a test or as a debug-build
+     * assertion.
+     *
+     * It does construct every registered initializer, because reading `dependencies()`
+     * needs one, so a factory with side effects runs here — on Android too, where
+     * [Startup.install] would never have called it. That is what makes this the way to
+     * reach these diagnostics on all eleven targets.
      *
      * @throws StartupException with the same diagnostics [plan] would raise.
      */

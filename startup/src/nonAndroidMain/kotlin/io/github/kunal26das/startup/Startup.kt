@@ -18,6 +18,17 @@ actual object Startup {
         return appInitializer
     }
 
+    /** Composes [manifest] in, handing each wave to [runner] rather than to this thread. */
+    actual fun install(
+        context: Context,
+        manifest: StartupManifest,
+        runner: WaveRunner,
+    ): AppInitializer {
+        val appInitializer = getInstance(context)
+        appInitializer.engine.install(manifest, runner)
+        return appInitializer
+    }
+
     /** The [AppInitializer] for this process, created on first use. */
     actual fun getInstance(context: Context): AppInitializer = lock.withLock {
         instance ?: AppInitializer(context).also { instance = it }

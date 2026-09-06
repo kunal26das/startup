@@ -10,8 +10,10 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-val artifactVersion = "2.0.0"
+val artifactVersion = "2.1.0"
 val androidMinSdk = 21
+val androidxStartupMinSdk = 21
+val androidxStartupMinCompileSdk = 34
 val androidMinCompileSdk = 34
 val androidAar = layout.buildDirectory.file("outputs/aar/startup.aar")
 val objCFramework = "Startup"
@@ -181,10 +183,10 @@ val checkAndroidFloors = tasks.register("checkAndroidFloors") {
             .find(entries.getValue("META-INF/com/android/build/gradle/aar-metadata.properties"))
             ?.groupValues?.get(1)?.toInt()
         val failures = listOfNotNull(
-            "The AAR declares minSdkVersion $minSdk. androidx.startup:startup-runtime declares 21, so anything above $androidMinSdk fails a lower consumer's manifest merger for a wrapper that calls nothing newer than API 1."
-                .takeIf { minSdk == null || minSdk > androidMinSdk },
-            "The AAR declares minCompileSdk $minCompileSdk. androidx.startup:startup-runtime declares 34, so anything above $androidMinCompileSdk forces every consumer to move compileSdk, and checkAarMetadata has no override."
-                .takeIf { minCompileSdk == null || minCompileSdk > androidMinCompileSdk },
+            "The AAR declares minSdkVersion $minSdk. androidx.startup:startup-runtime declares $androidxStartupMinSdk, so anything above that fails a lower consumer's manifest merger for a wrapper that calls nothing newer than API 1."
+                .takeIf { minSdk == null || minSdk > androidxStartupMinSdk },
+            "The AAR declares minCompileSdk $minCompileSdk. androidx.startup:startup-runtime declares $androidxStartupMinCompileSdk, so anything above that forces every consumer to move compileSdk, and checkAarMetadata has no override."
+                .takeIf { minCompileSdk == null || minCompileSdk > androidxStartupMinCompileSdk },
         )
         outputs.files.singleFile.writeText(failures.joinToString("\n").ifEmpty { "ok" })
         check(failures.isEmpty()) {

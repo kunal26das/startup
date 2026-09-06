@@ -6,18 +6,22 @@ package io.github.kunal26das.startup
  * @property order every component to create, dependencies first. This is what the runtime
  * walks, one component at a time, on the calling thread.
  * @property waves the same components grouped into Kahn levels: everything in a wave
- * depends only on earlier waves, and `waves.flatten()` is exactly [order]. This is
- * **diagnostic data, not a scheduling hook.** Nothing in this library ever runs a wave on
- * another thread, and no consumer can make it: [AppInitializer.initializeComponent] and
- * `Startup.install` are both serialized behind one reentrant lock, so driving them from
- * several threads only queues them, and a `create` running on a worker thread that called
- * back into `initializeComponent` would block on a lock the calling thread still holds.
- * A consumer that genuinely wants concurrent startup has to construct and run its own
- * initializers off this grouping, outside [AppInitializer], and hold the results itself.
+ * depends only on earlier waves, and `waves.flatten()` is exactly [order]. That is what
+ * makes a wave safe to run all at once, which is what `Startup.install(context, manifest,
+ * runner)` does with a [WaveRunner]; without one the runtime walks [order] instead, one
+ * component at a time on the calling thread.
+ *
+ * Reading it is also the way to run the graph entirely outside this library: construct
+ * your own initializers off this grouping and hold the results yourself. Either way the
+ * one rule is that a component running in a wave must not call back into
+ * [AppInitializer.initializeComponent], which is serialized behind a lock the installing
+ * thread still holds. Declare what it needs in [Initializer.dependencies] instead, which
+ * is what puts it in a later wave.
  */
 class StartupPlan internal constructor(
     val order: List<AnyInitializerKey>,
     val waves: List<List<AnyInitializerKey>>,
+    internal val edges: Map<AnyInitializerKey, List<AnyInitializerKey>> = emptyMap(),
 ) {
 
     /** Whether there is nothing left to create. */

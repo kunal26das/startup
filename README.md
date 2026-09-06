@@ -26,7 +26,7 @@ CI has no x86_64 macOS runner, so a green build is not evidence that their test 
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.kunal26das:startup:2.0.0")
+            implementation("io.github.kunal26das:startup:2.1.0")
         }
     }
 }
@@ -287,7 +287,9 @@ Declaring the component in the manifest is what makes the two agree.
 This is the one failure this library can produce that plain `androidx.startup` cannot, and it is
 worth naming. On Android the `StartupManifest` factories are never called: `InitializationProvider`
 reads the AndroidManifest and nothing else. So a component registered with `metaData<T>` and left
-out of the XML runs correctly on ten targets and silently never runs on the eleventh. There is no
+out of the XML runs correctly on ten targets and, in an app that relies on
+`InitializationProvider` alone, silently never runs on the eleventh. `Startup.install`
+does start it on Android, but `isEagerlyInitialized` still reports `false` for it. There is no
 exception, no log and no lint check, because from AndroidX's point of view nothing is wrong.
 
 Until 1.1.0 the library answered that itself, with `verifyAndroidManifest(context)`,
@@ -371,8 +373,8 @@ one reentrant lock, which is what AndroidX gets from `synchronized (sLock)`: a c
 exactly once however many threads ask for it, and an `Initializer.create` may call back into
 `initializeComponent` without deadlocking. There are no coroutines anywhere in the library, because
 `runBlocking` does not exist on Kotlin/JS or Kotlin/Wasm. `StartupPlan.waves` exposes the Kahn
-levels as data, and that is an inspection API, not a scheduling hook — see **Startup is sequential,
-and the waves will not change that** below.
+levels as data, and `Startup.install(context, manifest, runner)` hands each level to a `WaveRunner`
+of your choosing — see **Running a wave concurrently** below for what a task may not do.
 
 `AppInitializer` is the same two members here that it is on Android. Until 1.1.0 it carried three
 more off Android — `isInitialized(component)`, `initializationOrder()` and `manifest()` — and
@@ -411,12 +413,12 @@ snippets in this section name types that do not exist:
 ```kotlin
 kotlin {
     sourceSets.commonMain.dependencies {
-        api("io.github.kunal26das:startup:2.0.0")
+        api("io.github.kunal26das:startup:2.1.0")
     }
     listOf(iosArm64(), iosSimulatorArm64(), iosX64()).forEach {
         it.binaries.framework {
             baseName = "Shared"
-            export("io.github.kunal26das:startup:2.0.0")
+            export("io.github.kunal26das:startup:2.1.0")
         }
     }
 }
@@ -432,7 +434,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 kotlin {
     targets.withType<KotlinNativeTarget>().configureEach {
         binaries.withType<Framework>().configureEach {
-            export("io.github.kunal26das:startup:2.0.0")
+            export("io.github.kunal26das:startup:2.1.0")
         }
     }
 }
@@ -442,7 +444,7 @@ kotlin {
 the framework are not specified as API dependencies of a corresponding source set*.
 
 You may already have it without writing the line. A framework with `transitiveExport = true` that
-exports a module which declares `api("io.github.kunal26das:startup:2.0.0")` exports this library too,
+exports a module which declares `api("io.github.kunal26das:startup:2.1.0")` exports this library too,
 which is what a convention plugin that exports a shared `core` module typically produces. Check the
 generated header for `swift_name("InitializerKeyKt")` before adding anything: if it is there, the
 export is already in place.
@@ -526,8 +528,8 @@ neither the export shape nor the recipe above can regress unnoticed.
 
 ## Where the two runtimes differ
 
-Everything in the API mapping below behaves the same on all eleven targets. Three things do not, and
-all three are cases where code written and tested on Android would misbehave elsewhere.
+Everything in the API mapping below behaves the same on all eleven targets. Five things do not, and
+the first four are cases where code written and tested on Android would misbehave elsewhere.
 
 - **The order of independent components.** Both runtimes always create a dependency before the
   component that declares it. For components with no edge between them, AndroidX walks each eager
@@ -542,33 +544,49 @@ all three are cases where code written and tested on Android would misbehave els
   `androidx.startup.StartupException`, with the message `Cannot initialize <FQCN>. Cycle detected.`
   and no path. `StartupPlanner.validate(manifest)` is the way to get this library's diagnostics on
   Android too.
+- **A factory that builds something else.** A factory has to produce exactly the class its key
+  names. The check is `commonMain`, so it fires on every target where the graph is planned — but
+  `Startup.install` on Android never calls a factory, so there it fires only under
+  `StartupPlanner.validate(manifest)`. An Android app that never validates keeps running, on the
+  class AndroidX reflected rather than the one the factory would have built.
 - **Which registry decides.** Off Android the `StartupManifest` is the whole registry. On Android
   it is the AndroidManifest, and the factories in the `StartupManifest` are never called. That is
   the one failure mode adopting this library adds. The AndroidManifest is the source of truth there
   and a parity test of your own is the answer to it; see **Keep the two Android registries in step**
   above.
 
-### Startup is sequential, and the waves will not change that
+### Running a wave concurrently
 
-Both runtimes create one component at a time on the calling thread. If you are migrating off a
-hand-rolled runtime that ran each level of the graph concurrently, **you lose that**, and the cost is
-the critical path of every initializer that really does block.
+By default both runtimes create one component at a time on the calling thread. Everything in a
+`StartupPlan` wave depends only on earlier waves, though, so a wave is safe to run all at once, and
+`Startup.install(context, manifest, runner)` hands each one to a `WaveRunner` in turn:
 
-`StartupPlan.waves` looks like the way to get it back and is not. It is diagnostic data: the levels
-of the graph, where `waves.flatten()` is exactly `plan.order`. Nothing in the public API executes a
-level, and nothing can be made to. `AppInitializer.initializeComponent` and `Startup.install` are
-both serialized behind one reentrant lock, so N threads driving one wave through them queue instead
-of overlapping, and a `create` running on a worker thread that reads a dependency back through
-`initializeComponent` — the pattern AndroidX documents, and the one every example on this page uses
-— would block on a lock the calling thread still holds. Releasing that lock for the duration of a
-wave would let a second `install` interleave, which is the thing it exists to prevent, so a
-`runWave` parameter is not a change this library is going to make.
+```kotlin
+Startup.install(context, manifest) { wave ->
+    runBlocking { coroutineScope { wave.map { async { it() } }.awaitAll() } }
+}
+```
 
-Concurrent startup therefore means not using `AppInitializer` for the concurrent part. You already
-have everything needed to do that outside the library: plan with
+The library keeps the ordering, the cycle detection, the deduplication and the created components;
+the concurrency is yours. `install` waits for each wave before planning the next, so `run` **must**
+invoke every task exactly once and must not return until all of them have finished.
+
+**A task must not call `AppInitializer.initializeComponent`.** The lock is held across the whole
+install, so a task on another thread would block on a lock the installing thread still owns. That
+rules out the pattern AndroidX documents and every imperative example on this page uses: a manifest
+whose components resolve each other from inside `create` has to be installed without a runner.
+Declaring the edge in `dependencies()` is what makes it safe, because that is what puts the
+dependency in an earlier wave.
+
+On Android the runner is ignored — `androidx.startup` creates each component itself, depth first
+on the calling thread, and offers no seam to change it. A runner is therefore a performance decision on
+the other ten targets and never a correctness one, so anything that must run before something else
+still has to say so in `dependencies()`.
+
+You can also skip `AppInitializer` for the concurrent part entirely: plan with
 `StartupPlanner.plan(manifest, roots, satisfied)`, read `plan.waves`, construct your own initializers
 — you wrote the factories — call `create(context)` on a level in parallel, and hold the results
-yourself. That is a real fork in the road, not a seam, and it is worth measuring first: an
+yourself. That is a fork in the road rather than a seam, and it is worth measuring first: an
 initializer that hands its work to a background scheduler and returns immediately costs the same
 either way.
 
@@ -590,6 +608,7 @@ either way.
 | no equivalent                                         | `StartupManifest { metaData(key) { it } }`          | still the manifest             |
 | `tools:node="remove"`                                 | `StartupManifest { remove<T>() }`                   | still the manifest             |
 | `InitializationProvider.onCreate()`                   | `Startup.install(context, manifest)`                | eagerly initializes            |
+| no equivalent                                         | `Startup.install(context, manifest, runner)`        | runner ignored                 |
 | `androidx.startup.StartupException`                   | `StartupException`                                  | **not** a `typealias`          |
 
 `StartupException` is deliberately our own type. AndroidX annotates its exception
@@ -610,6 +629,25 @@ One *no equivalent* row survives, `StartupManifest { metaData(key) { it } }`, an
 that group. It is the registration `androidx.startup` performs by name in XML, expressed as a key,
 which makes it *closer* to `androidx.startup` than the `reified` overload beside it, and it is the
 only way Swift or a plugin host can register an initializer the compiler cannot name.
+
+## Upgrading from 2.0.0
+
+**2.1.0 tightens one rule.** A factory must now build exactly the class its key names;
+2.0.0 accepted a subclass and filed it under the supertype. That never worked on Android,
+where AndroidX ignores the factory and reflects the key, so `metaData<Base> { Derived() }`
+started `Base` on Android and `Derived` everywhere else from one manifest. Register the
+subclass under its own key. Because the covariance of Kotlin function types lets the
+`reified` overloads express the mismatch too, this affects `metaData<T> { ... }` and
+`lazyInitializer<T> { ... }` as well as the key-taking overloads.
+
+The rejection lives in `commonMain` and fires wherever the graph is planned, Android
+included: `Startup.install` never calls a factory there, so it does not surface it, but
+`StartupPlanner.validate(manifest)` does, on all eleven targets.
+
+2.1.0 also **adds** `Startup.install(context, manifest, runner)` and the `WaveRunner` it takes,
+which run each wave of the plan however the host wants rather than on the calling thread; see
+**Running a wave concurrently**. It is ignored on Android, and nothing else published in 2.0.0
+changed.
 
 ## Upgrading from 1.x
 
@@ -695,7 +733,9 @@ without a public no-argument constructor fails at runtime with
 or from another component resolved through `initializeComponent`.
 
 For the same reason the factory is never used to construct the initializer twice: it is called at
-most once per manifest, and only off Android.
+most once per run, and only off Android. `StartupPlanner.plan` and
+`StartupPlanner.validate` also call it, on every target including Android, because reading
+`dependencies()` needs an instance.
 
 ## Diagnostics
 
@@ -736,11 +776,30 @@ Register it in a StartupManifest with metaData or lazyInitializer, then install 
 with Startup.install(context, manifest).
 ```
 
+A component a `remove<T>()` entry hides says so, rather than claiming nobody registered it, so the
+remedy on offer is not to re-register the entry the application took out:
+
+```
+Cannot initialize Alpha. A remove() entry hides it, and Beta still declares it as a dependency.
+Drop that dependencies() entry, or stop removing the component. Startup.install on Android reads
+dependencies() reflectively without consulting a StartupManifest, so it creates it there anyway.
+```
+
+A factory registered under a key it does not build names both classes and the remedy:
+
+```
+Cannot initialize Alpha. Its factory produced a Beta instead. A factory has to build the class its
+key names: the product would be filed under the registered key here, while Startup.install on
+Android ignores the factory and reflects the key, so one manifest would build two different
+graphs. Register it under its own key.
+```
+
 Component names are fully qualified on Android, where the key is a `java.lang.Class`, and simple
 elsewhere, because `KClass.qualifiedName` does not compile on Kotlin/JS.
 
-`StartupPlanner.validate(manifest)` walks the whole graph without creating anything, which makes a
-cycle or a missing registration a test failure rather than a launch failure.
+`StartupPlanner.validate(manifest)` walks the whole graph without calling `Initializer.create`,
+which makes a cycle or a missing registration a test failure rather than a launch failure. It does
+construct every registered initializer, because reading `dependencies()` needs one.
 
 A component that re-enters the runtime from inside its own `create` for something that leads back to
 it is caught the same way, at the point of re-entry, rather than recursing until the stack dies.
@@ -800,8 +859,8 @@ xcrun simctl launch --console booted io.github.kunal26das.startup.sample.app
 
 The app shows the report in a scrollable monospaced view and prints the same lines, so `--console`
 gives the desktop output while the simulator shows the screen. Its entry point is the `main` in
-`iosMain`, which hands control to `UIApplicationMain`; the other ten targets share the `main` in
-`consoleMain`, which prints and exits.
+`iosMain`, which hands control to `UIApplicationMain`; the other seven console targets share the
+`main` in `consoleMain`, which prints and exits.
 
 The two browser tasks start a webpack dev server on <http://localhost:8080/> and never exit; stop
 them with Ctrl-C. They bind the same port, so run one at a time.
@@ -855,8 +914,8 @@ module. Three verification tasks run beside the tests:
 The first two need a macOS host and skip elsewhere; the third runs anywhere.
 
 `linuxX64Test`, `mingwX64Test`, `macosX64Test` and `iosX64Test` are disabled on an arm64 Mac, so
-linking their test binaries is the local proof. CI runs them for real on `ubuntu-latest` and
-`windows-latest`.
+linking their test binaries is the local proof. CI runs the first two for real on `ubuntu-latest`
+and `windows-latest`; `macosX64Test` and `iosX64Test` run nowhere.
 
 ## License
 

@@ -202,7 +202,18 @@ loss is stated, never quietly dropped.
 `initializerKey(initializer)` and `initializerKey(kClass)`. `androidx.startup` registers by name in
 XML, so a key-taking overload is *closer* to it than a `reified` one, and without them Swift cannot
 register a host-supplied initializer at all. Everything else published in 1.1.0 is unchanged in
-2.0.0; this release removes those eight and nothing else.
+2.0.0; that release removes those eight and nothing else.
+
+**2.1.0 tightens one rule and adds nothing.** `StartupManifest.initializerOf` now rejects a factory
+whose product does not key to the component it was registered under, so
+`metaData<Base> { Derived() }` throws where 2.0.0 filed the `Derived` under `Base`'s key. Kotlin
+function types are covariant in their return type, so the `reified` overloads express the mismatch
+as readily as the key-taking ones. It earns its place by the usual rule rather than in spite of it:
+registering a subclass under a supertype key never worked on Android, where AndroidX reflects the
+key and ignores the factory, so accepting it off Android let one manifest build two different
+graphs. The check is `commonMain`, so it fires on Android too — under `StartupPlanner.validate`,
+never under `Startup.install`, which calls no factory there. Do not phrase it as an "off Android"
+rule anywhere; that was wrong in README.md once already.
 
 One assertion was lost outright and is not covered anywhere. `androidManifestMetadata()` emitted a
 line per node in declaration order, tombstones included, so `StartupManifestBuilderTest` could assert
@@ -344,20 +355,26 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   the only configuration in this repository that matches what an application actually gets.
 - `compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }` is required for the
   `expect`/`actual` classes above.
-- No coroutines and no `runBlocking`: neither exists on Kotlin/JS or Kotlin/Wasm, and both are
-  first-class targets here. Execution is sequential on the calling thread. `StartupPlan.waves`
-  exposes the Kahn levels as **diagnostic data**, with `waves.flatten() == order` as its whole
-  contract, and it is not a scheduling hook. Do not add a `runWave` parameter to `install`: every
-  engine entry point is serialized behind one reentrant `StartupLock`, so a `create` running on a
-  worker thread that reads a dependency back through `initializeComponent` — the AndroidX-documented
-  pattern, used by `sample`'s own `NetworkInitializer`, `AnalyticsInitializer` and
-  `CrashReportingInitializer` — blocks on a lock the calling thread still holds, and releasing the
-  lock for the duration of a wave lets a second `install` interleave, which is what it exists to
-  stop. A consumer who wants concurrency plans with `StartupPlanner`, reads `waves`, and runs its
-  own initializers outside `AppInitializer`. Wish reported the migration costing it the concurrent
-  startup its hand-rolled runtime had; that cost is real, it is documented in README.md's **Startup
-  is sequential, and the waves will not change that**, and it is the price of the JS and Wasm
-  targets.
+- No coroutines and no `runBlocking` **inside the library**: neither exists on Kotlin/JS or
+  Kotlin/Wasm, and both are first-class targets here. Execution is sequential on the calling thread
+  unless the caller supplies one. `StartupPlan.waves` exposes the Kahn levels, `waves.flatten() ==
+  order` is still its whole contract, and as of 2.1.0 it is also the unit
+  `Startup.install(context, manifest, runner)` hands to a `WaveRunner`. That is the seam this file
+  spent three releases refusing, and it is only sound because of where it was put: the host runs the
+  wave, the library keeps the planning, ordering, cycle detection and the created components, and no
+  coroutine is linked into the artifact.
+  **The lock is still held across the whole install, so a task inside a runner may not call
+  `initializeComponent`** — it would block on a lock the installing thread still owns. That is the
+  original objection and it did not go away; it became a documented caller constraint. It also
+  means `sample`'s own manifest cannot be installed with a runner, because
+  `NetworkInitializer`, `AnalyticsInitializer` and `CrashReportingInitializer` resolve each other
+  imperatively, which is the AndroidX-documented pattern. Declaring the edge in `dependencies()` is
+  what makes a component safe to run in a wave, because that is what puts its dependency in an
+  earlier one. On Android the runner is ignored: AndroidX owns creation and offers no seam, so a
+  runner is a performance decision on the other ten targets and never a correctness one. Wish
+  reported the 1.x migration costing it the concurrent startup its hand-rolled runtime had; that is
+  the cost this closes, and README.md's **Running a wave concurrently** is the consumer-facing
+  version.
 - `internal expect class StartupLock` in `nonAndroidMain`, with four actuals: `ReentrantLock` on the
   JVM, a reentrant spin lock over `kotlin.concurrent.AtomicReference` plus a `@ThreadLocal` token on
   Native, and a direct call on JS and Wasm, which are single-threaded. AndroidX serializes every
@@ -420,6 +437,30 @@ the ordering rules cannot hide on one platform. Five properties matter and each 
    died, and killed the process outright on Kotlin/Native.
 5. Everything a component declares is read inside a guard, `dependencies()` as well as `create()`, so
    a caller only ever has to catch `StartupException`. AndroidX wraps both in the same `try`.
+6. The path that second guard reports is stitched from frames, not from `creating`. `creating` is
+   the nesting stack, and two entries next to each other in it need share no edge: the outer
+   component asked for something else that merely happened to need the inner one first. Rendering
+   the stack directly printed `A -> B -> A` for a graph whose real cycle was `A -> D -> B -> E ->
+   A`, naming an edge that exists nowhere and dropping the component that joined the frames. Each
+   in-flight component therefore carries the `StartupEngine.Frame` — the roots and
+   `StartupPlan.edges` of the `execute` call that created it — and `reentrantCycle` walks frame by
+   frame, breadth first, filling in the hops between. `StartupPlan.edges` is internal and exists
+   for nothing else. `namesTheComponentThatLinksTwoNestedCreateCalls` nests two levels deep, which
+   is the only shape that catches this; do not delete it.
+7. The engine's map of constructed-but-not-yet-created initializers is emptied when the outermost
+   run unwinds, however it ends, and the guard is a `depth` counter rather than
+   `creating.isEmpty()`. The map has to outlive a single plan, because `dependencies()` is read at
+   plan time and `create()` runs later, and a nested `initializeComponent` has to see the same
+   instance. It must not outlive the run: `installed += manifest` lets a later install replace a
+   component's factory, and `initializerOf` answers from the map before it reads the factory, so an
+   instance stranded by a failed run shadows the replacement and the corrective install fails
+   identically. `creating` cannot be the guard, because `dependencies()` is itself allowed to call
+   `initializeComponent`, and that nested run begins while the outermost one is still planning and
+   `creating` is still empty — it would clear the map out from under the outer plan and rebuild
+   everything already built. Both halves are pinned, by
+   `letsALaterInstallReplaceAComponentAFailedInstallLeftUncreated` and
+   `keepsTheOuterPlansInitializersWhenDependenciesResolvesSomething`. Through 1.1.0 the map was a
+   field on `StartupManifest`, which `plus` rebuilt per install, so the scope was accidental.
 
 ## Where the two runtimes differ
 
@@ -428,7 +469,16 @@ Deliberate, documented in README.md, and not to be "fixed" silently:
 - Independent components are ordered by AndroidX's depth-first walk on Android and by Kahn levels
   elsewhere. Both are valid topological orders; only a declared dependency is portable.
 - `initializeComponent` succeeds on Android for a component no manifest registers, because AndroidX
-  reflects and never reads a manifest. Off Android it throws.
+  reflects and never reads a manifest. Off Android it throws. The same holds for a component
+  `remove<T>()` hides, and for one an eager component still depends on: AndroidX reads
+  `dependencies()` reflectively and never consults a `StartupManifest`, so it creates it there while
+  off Android the manifest fails to plan. `requireRegistered` reports that as a removal rather than
+  as a missing registration, so the remedy on offer is not to re-register the entry the application
+  deliberately took out. Its two arms say different things, because the component can be reached as
+  a dependency or asked for outright, and only the first has a `dependencies()` entry to drop.
+- A factory that builds something other than the class its key names throws wherever the graph is
+  planned. On Android that is `StartupPlanner.validate` only, because `Startup.install` never calls
+  a factory there, so an app that does not validate keeps running on the class AndroidX reflected.
 - A key names its class fully on Android, where it is a `java.lang.Class`, and simply everywhere
   else, because `KClass.qualifiedName` does not compile on Kotlin/JS. That is why an AndroidManifest
   parity check has to live in an Android source set: `sample`'s `AndroidManifestParityTest` compares
@@ -545,4 +595,16 @@ works on a machine with no GPG key. A real release therefore reads:
 
 with `ORG_GRADLE_PROJECT_signingInMemoryKey`, `ORG_GRADLE_PROJECT_signingInMemoryKeyPassword`,
 `ORG_GRADLE_PROJECT_mavenCentralUsername` and `ORG_GRADLE_PROJECT_mavenCentralPassword` in the
-environment. No CI job does this; it is a manual step.
+environment. `.github/workflows/release.yml` runs that command — plus
+`--no-configuration-cache` — on every push of a `v*` tag, so pushing a `v*` tag is itself an
+irreversible Maven Central release; the command above is only the out-of-band fallback. It then
+publishes to GitHub Packages and cuts a GitHub release, both unconditionally. A
+`workflow_dispatch` run does the same except that the Central step is gated behind the
+`maven-central` input, which exists because Central refuses a coordinate that is already
+released, so a re-run can republish to GitHub Packages alone.
+
+The job also fails outright if the pushed tag does not equal `artifactVersion` in
+`startup/build.gradle.kts`. That is the check that makes an unbumped version a release-time
+error rather than a silent republish attempt: any behaviour change needs the version moved in
+the same commit, because `v1.0.0`, `v1.1.0`, `v2.0.0` and `v2.1.0` are all tagged and Central
+holds every one of them immutably.

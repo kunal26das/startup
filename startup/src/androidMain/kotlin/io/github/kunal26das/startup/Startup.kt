@@ -24,6 +24,20 @@ actual object Startup {
         return instance
     }
 
+    /**
+     * Ignores [runner] and installs exactly as the other overload does.
+     *
+     * `androidx.startup` owns creation on Android and runs each component depth first on
+     * the calling thread, with no seam to hand a wave anywhere else. Shared code may pass
+     * a runner unconditionally: it takes effect on the other ten targets and changes
+     * nothing here.
+     */
+    actual fun install(
+        context: Context,
+        manifest: StartupManifest,
+        runner: WaveRunner,
+    ): AppInitializer = install(context, manifest)
+
     /** AndroidX's process-wide singleton, unchanged. */
     actual fun getInstance(context: Context): AppInitializer = AppInitializer.getInstance(context)
 }

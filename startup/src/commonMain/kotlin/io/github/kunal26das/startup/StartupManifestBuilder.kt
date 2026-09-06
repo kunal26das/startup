@@ -31,6 +31,10 @@ class StartupManifestBuilder internal constructor() {
      * [factory] must construct [T] with no arguments: AndroidX ignores it and reflects on
      * the class instead, so a factory that passes constructor arguments works everywhere
      * except Android, where it throws `StartupException(NoSuchMethodException)`.
+     *
+     * It must also build [T] itself and not a subclass. Kotlin function types are covariant
+     * in their return type, so `metaData<Base> { Derived() }` compiles; it is rejected when
+     * the graph is planned, on every target.
      */
     @HiddenFromObjC
     inline fun <reified T : Initializer<*>> metaData(noinline factory: () -> T) {
@@ -48,6 +52,11 @@ class StartupManifestBuilder internal constructor() {
      *
      * The same no-argument constructor rule as the `reified` overload applies on Android,
      * where the factory is ignored and the class named by [component] is reflected on.
+     *
+     * [factory] must also build exactly the class [component] names. Registering a subclass
+     * under a supertype key is rejected when the graph is planned, because AndroidX reflects
+     * [component] and ignores the factory, so accepting it would let one manifest build a
+     * different graph on Android than everywhere else.
      */
     fun metaData(component: AnyInitializerKey, factory: () -> Initializer<*>) {
         nodes[component] = Node.Merge(factory)
@@ -58,7 +67,7 @@ class StartupManifestBuilder internal constructor() {
      * equivalent of a class that an Android app deliberately leaves out of its
      * `InitializationProvider` block.
      *
-     * The same no-argument constructor rule as [metaData] applies.
+     * The same no-argument constructor and exact-class rules as [metaData] apply.
      */
     @HiddenFromObjC
     inline fun <reified T : Initializer<*>> lazyInitializer(noinline factory: () -> T) {
@@ -67,7 +76,8 @@ class StartupManifestBuilder internal constructor() {
 
     /**
      * Registers [component] as a component created only when something asks for it, under
-     * a key the caller computed rather than one the compiler reified.
+     * a key the caller computed rather than one the compiler reified. The same no-argument
+     * constructor and exact-class rules as [metaData] apply.
      */
     fun lazyInitializer(component: AnyInitializerKey, factory: () -> Initializer<*>) {
         nodes[component] = Node.Lazy(factory)
@@ -77,11 +87,14 @@ class StartupManifestBuilder internal constructor() {
      * Hides [T], the equivalent of `tools:node="remove"`. Use it to drop an entry an
      * [include]d manifest contributed.
      *
-     * On Android this only suppresses what [Startup.install] would otherwise start. A
-     * component that a library contributed through its own AndroidManifest is created by
-     * `InitializationProvider` before any application code runs, so nothing here can
-     * reach it; suppressing that needs a real `tools:node="remove"` entry written by hand
-     * in the application's AndroidManifest.
+     * On Android this only suppresses what [Startup.install] would otherwise start, and
+     * only when nothing else pulls the component in: AndroidX reads `dependencies()`
+     * reflectively without consulting a [StartupManifest], so a tombstoned component that
+     * an eager component still depends on is created there regardless, while off Android
+     * the same manifest fails to plan. A component that a library contributed through its
+     * own AndroidManifest is created by `InitializationProvider` before any application
+     * code runs, so nothing here can reach it; suppressing that needs a real
+     * `tools:node="remove"` entry written by hand in the application's AndroidManifest.
      */
     @HiddenFromObjC
     inline fun <reified T : Initializer<*>> remove() {

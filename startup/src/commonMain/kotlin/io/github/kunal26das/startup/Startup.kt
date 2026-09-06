@@ -28,6 +28,28 @@ expect object Startup {
     fun install(context: Context, manifest: StartupManifest): AppInitializer
 
     /**
+     * Composes [manifest] in and eagerly creates every component it marks as eager,
+     * handing each [StartupPlan] wave to [runner] instead of creating it on this thread.
+     *
+     * Everything the other overload guarantees still holds: a dependency is created
+     * before the component that declares it, each component is created once, and the
+     * results are readable through [AppInitializer.initializeComponent]. The only
+     * difference is that the components of one wave, which by construction depend only on
+     * earlier waves, are handed over together so [runner] may run them at the same time.
+     *
+     * On Android [runner] is ignored: `androidx.startup` creates each component itself,
+     * depth first on the calling thread, and offers no seam to change that. A runner is
+     * therefore a performance decision on the other ten targets and never a correctness
+     * one, so an initializer that must run before another still has to say so in
+     * [Initializer.dependencies]. See [WaveRunner] for what a task may not do.
+     */
+    fun install(
+        context: Context,
+        manifest: StartupManifest,
+        runner: WaveRunner,
+    ): AppInitializer
+
+    /**
      * The [AppInitializer] for this process, creating it on first use. The context of the
      * first caller is the one handed to every [Initializer.create].
      */

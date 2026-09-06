@@ -30,8 +30,6 @@ class StartupManifest internal constructor(
     internal val nodes: Map<AnyInitializerKey, Node>,
 ) {
 
-    private val instances = LinkedHashMap<AnyInitializerKey, Initializer<*>>()
-
     /** Every registered component, in declaration order, tombstones excluded. */
     val components: List<AnyInitializerKey>
         get() = nodes.entries.filter { it.value != Node.Remove }.map { it.key }
@@ -65,15 +63,18 @@ class StartupManifest internal constructor(
         }
 
     internal fun requireRegistered(component: AnyInitializerKey, requiredBy: AnyInitializerKey?) {
-        if (factoryOf(component) != null) return
-        throw StartupException(
-            missingComponentMessage(component, requiredBy),
-            null,
-            listOfNotNull(component, requiredBy),
-        )
+        val message = when (nodes[component]) {
+            is Node.Merge, is Node.Lazy -> return
+            Node.Remove -> removedComponentMessage(component, requiredBy)
+            null -> missingComponentMessage(component, requiredBy)
+        }
+        throw StartupException(message, null, listOfNotNull(component, requiredBy))
     }
 
-    internal fun initializerOf(component: AnyInitializerKey): Initializer<*> {
+    internal fun initializerOf(
+        component: AnyInitializerKey,
+        instances: MutableMap<AnyInitializerKey, Initializer<*>>,
+    ): Initializer<*> {
         instances[component]?.let { return it }
         val factory = factoryOf(component)
             ?: throw StartupException(
@@ -90,12 +91,23 @@ class StartupManifest internal constructor(
                 listOf(component),
             )
         }
+        val produced = initializerKey(initializer)
+        if (produced != component) {
+            throw StartupException(
+                mismatchedFactoryMessage(component, produced),
+                null,
+                listOf(component, produced),
+            )
+        }
         instances[component] = initializer
         return initializer
     }
 
-    internal fun dependenciesOf(component: AnyInitializerKey): List<AnyInitializerKey> {
-        val initializer = initializerOf(component)
+    internal fun dependenciesOf(
+        component: AnyInitializerKey,
+        instances: MutableMap<AnyInitializerKey, Initializer<*>>,
+    ): List<AnyInitializerKey> {
+        val initializer = initializerOf(component, instances)
         return try {
             initializer.dependencies()
         } catch (exception: StartupException) {
@@ -107,6 +119,37 @@ class StartupManifest internal constructor(
                 listOf(component),
             )
         }
+    }
+
+    private fun removedComponentMessage(
+        component: AnyInitializerKey,
+        requiredBy: AnyInitializerKey?,
+    ): String = buildString {
+        append("Cannot initialize ").append(componentName(component)).append(". ")
+        append("A remove() entry hides it")
+        if (requiredBy != null) {
+            append(", and ").append(componentName(requiredBy))
+            append(" still declares it as a dependency. ")
+            append("Drop that dependencies() entry, or stop removing the component. ")
+            append("Startup.install on Android reads dependencies() reflectively without ")
+            append("consulting a StartupManifest, so it creates it there anyway.")
+        } else {
+            append(". Stop removing it to make it resolvable again. ")
+            append("Startup.install on Android reflects the class it is asked for without ")
+            append("consulting a StartupManifest, so it creates it there anyway.")
+        }
+    }
+
+    private fun mismatchedFactoryMessage(
+        component: AnyInitializerKey,
+        produced: AnyInitializerKey,
+    ): String = buildString {
+        append("Cannot initialize ").append(componentName(component)).append(". ")
+        append("Its factory produced a ").append(componentName(produced))
+        append(" instead. A factory has to build the class its key names: the product ")
+        append("would be filed under the registered key here, while Startup.install on ")
+        append("Android ignores the factory and reflects the key, so one manifest would ")
+        append("build two different graphs. Register it under its own key.")
     }
 
     private fun missingComponentMessage(
