@@ -43,7 +43,7 @@ jobs:
           :sample:compileKotlinJs
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-test-reports
           path: "**/build/reports/tests"
@@ -68,7 +68,7 @@ jobs:
         run: ./gradlew linuxX64Test
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-test-reports
           path: "**/build/reports/tests"
@@ -94,7 +94,7 @@ jobs:
         run: ./gradlew mingwX64Test
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-test-reports
           path: "**/build/reports/tests"
