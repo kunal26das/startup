@@ -26,7 +26,7 @@ jobs:
       - name: Set up the Android SDK
         uses: android-actions/setup-android@v4
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: Build and test every target
         run: >
           ./gradlew build
@@ -63,7 +63,7 @@ jobs:
       - name: Set up the Android SDK
         uses: android-actions/setup-android@v4
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: Run the linuxX64 tests
         run: ./gradlew linuxX64Test
       - name: Upload test reports
@@ -88,7 +88,7 @@ jobs:
       - name: Set up the Android SDK
         uses: android-actions/setup-android@v4
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: Run the mingwX64 tests
         shell: bash
         run: ./gradlew mingwX64Test
