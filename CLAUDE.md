@@ -702,5 +702,5 @@ released, so a re-run can republish to GitHub Packages alone.
 The job also fails outright if the pushed tag does not equal `artifactVersion` in
 `startup/build.gradle.kts`. That is the check that makes an unbumped version a release-time
 error rather than a silent republish attempt: any behaviour change needs the version moved in
-the same commit, because `v1.0.0`, `v1.1.0`, `v2.0.0` and `v2.1.0` are all tagged and Central
-holds every one of them immutably.
+the same commit, because `v1.0.0`, `v1.1.0`, `v2.0.0`, `v2.1.0` and `v3.0.0` are all tagged and
+Central holds every one of them immutably.

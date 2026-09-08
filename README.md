@@ -20,6 +20,10 @@ trimmed path rather than as a bare "cycle detected".
 `macosX64` and `iosX64` are compiled and linked but never run: they are disabled on an arm64 Mac and
 CI has no x86_64 macOS runner, so a green build is not evidence that their test binaries executed.
 
+[klibs.io](https://klibs.io/project/kunal26das/startup) lists these targets too, read from the
+published artifacts rather than from this file, so it is where a consumer searching by target
+rather than by name finds the library.
+
 ## Installation
 
 ```kotlin
