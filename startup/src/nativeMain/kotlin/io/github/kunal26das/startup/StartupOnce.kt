@@ -6,5 +6,8 @@ internal actual class StartupOnce actual constructor() {
 
     private val claimed = AtomicInt(0)
 
+    actual val isClaimed: Boolean
+        get() = claimed.value != 0
+
     actual fun claim(): Boolean = claimed.compareAndSet(0, 1)
 }

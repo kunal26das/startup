@@ -35,43 +35,65 @@ class StartupTask(
 ) {
 
     private val once = StartupOnce()
+    private val repeated = StartupOnce()
+    private var bodyFailure: Throwable? = null
+
+    /** The wrapper raised for a body failure, so the engine can recover its original cause. */
+    internal var wrappedFailure: StartupException? = null
+        private set
 
     internal var completed: Boolean = false
         private set
 
-    internal var failure: Throwable? = null
-        private set
+    /**
+     * The body failure, or a duplicate invocation the runner caught and dropped.
+     *
+     * Only the thread that claimed this task writes [bodyFailure]. Another invocation
+     * records its refusal separately and atomically, so it cannot overwrite the body's
+     * failure or have a successful body erase the contract violation.
+     */
+    internal val failure: Throwable?
+        get() = bodyFailure ?: if (repeated.isClaimed) duplicateInvocation() else null
 
     /**
      * Creates [component].
      *
-     * Throws whatever [Initializer.create] threw, after recording it so the engine can
-     * report a runner that swallowed it. Throws [StartupException] if this task has
-     * already been claimed, whether by an earlier call or by one still running on another
-     * thread.
+     * Records the original failure from [Initializer.create] and throws it as a
+     * [StartupException], preserving an existing one or wrapping any other throwable as
+     * its cause. Swift can therefore catch every body failure as an `NSError` and return
+     * from its runner so the engine can report it. A second invocation also throws
+     * [StartupException], whether the claimed body has finished or is still running.
      */
     @Throws(StartupException::class)
     operator fun invoke() {
         if (!once.claim()) {
-            throw StartupException(
-                "Cannot initialize ${componentName(component)}. Its WaveRunner ran the same " +
-                    "task twice; run must invoke every task exactly once.",
-                null,
-                listOf(component),
-            )
+            repeated.claim()
+            throw duplicateInvocation()
         }
         val wasRunning = StartupWaveThread.running
         StartupWaveThread.running = true
         try {
             body()
         } catch (throwable: Throwable) {
-            failure = throwable
-            throw throwable
+            bodyFailure = throwable
+            if (throwable is StartupException) throw throwable
+            throw StartupException(
+                "Cannot initialize ${componentName(component)}.",
+                throwable,
+                listOf(component),
+            ).also { wrappedFailure = it }
         } finally {
             StartupWaveThread.running = wasRunning
         }
         completed = true
     }
+
+    private fun duplicateInvocation(): StartupException = StartupException(
+        "Cannot initialize ${componentName(component)}. Its WaveRunner ran the same " +
+            "task twice; run must invoke every task exactly once.",
+        null,
+        listOf(component),
+    )
 
     override fun toString(): String = componentName(component)
 }

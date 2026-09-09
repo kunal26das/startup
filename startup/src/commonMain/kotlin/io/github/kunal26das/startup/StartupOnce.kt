@@ -10,6 +10,9 @@ package io.github.kunal26das.startup
  */
 internal expect class StartupOnce() {
 
+    /** Whether any caller has taken the claim, read atomically. */
+    val isClaimed: Boolean
+
     /** Takes the claim, returning true only for the caller that took it first. */
     fun claim(): Boolean
 }

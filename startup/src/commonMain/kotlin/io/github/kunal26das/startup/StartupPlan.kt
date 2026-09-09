@@ -19,8 +19,8 @@ package io.github.kunal26das.startup
  * not from any other thread, where the lock it would wait for is held until the install ends,
  * and it may not for a component of the wave in flight, which is not written back until
  * [WaveRunner.run] returns. Declaring what a component needs in [Initializer.dependencies] is
- * what puts that dependency in an earlier wave, and that is what makes the call safe from
- * anywhere.
+ * what puts that dependency in an earlier wave. It does not permit engine reads from worker
+ * threads, even when the dependency has already completed.
  */
 class StartupPlan internal constructor(
     val order: List<AnyInitializerKey>,

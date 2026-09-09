@@ -4,6 +4,9 @@ internal actual class StartupOnce actual constructor() {
 
     private var claimed = false
 
+    actual val isClaimed: Boolean
+        get() = claimed
+
     actual fun claim(): Boolean {
         if (claimed) return false
         claimed = true

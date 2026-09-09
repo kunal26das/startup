@@ -48,23 +48,33 @@ object StartupPlanner {
         roots: List<AnyInitializerKey>,
         satisfied: Set<AnyInitializerKey>,
         instances: MutableMap<AnyInitializerKey, Initializer<*>>,
+        planning: StartupPlanning = StartupPlanning(),
     ): StartupPlan {
         val pending = LinkedHashSet<AnyInitializerKey>()
         val edges = LinkedHashMap<AnyInitializerKey, List<AnyInitializerKey>>()
+        val parents = LinkedHashMap<AnyInitializerKey, AnyInitializerKey>()
         val queue = ArrayDeque<AnyInitializerKey>()
         for (root in roots) {
             if (root in satisfied) continue
             manifest.requireRegistered(root, null)
-            if (pending.add(root)) queue.addLast(root)
+            if (pending.add(root)) {
+                parents[root] = root
+                queue.addLast(root)
+            }
         }
         while (queue.isNotEmpty()) {
             val component = queue.removeFirst()
-            val dependencies = manifest.dependenciesOf(component, instances).distinct()
+            val dependencies = planning.read(component, { pathTo(component, parents) }) {
+                manifest.dependenciesOf(component, instances).distinct()
+            }
             edges[component] = dependencies
             for (dependency in dependencies) {
                 if (dependency in satisfied) continue
                 manifest.requireRegistered(dependency, component)
-                if (pending.add(dependency)) queue.addLast(dependency)
+                if (pending.add(dependency)) {
+                    parents[dependency] = component
+                    queue.addLast(dependency)
+                }
             }
         }
 
@@ -130,6 +140,20 @@ object StartupPlanner {
     @Throws(StartupException::class)
     fun validate(manifest: StartupManifest) {
         plan(manifest, manifest.components, emptySet())
+    }
+
+    private fun pathTo(
+        component: AnyInitializerKey,
+        parents: Map<AnyInitializerKey, AnyInitializerKey>,
+    ): List<AnyInitializerKey> {
+        val path = ArrayList<AnyInitializerKey>()
+        var current = component
+        while (true) {
+            path.add(current)
+            val parent = parents.getValue(current)
+            if (parent == current) return path.reversed()
+            current = parent
+        }
     }
 
     private fun findCycle(

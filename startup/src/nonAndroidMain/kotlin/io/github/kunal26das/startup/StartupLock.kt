@@ -28,6 +28,7 @@ internal expect class StartupLock(guardsWaveTasks: Boolean) {
 internal fun startupLockBarrier(): StartupException = StartupException(
     "Cannot initialize the startup graph from this thread. It is running a WaveRunner task, " +
         "and the engine is held for the whole install, so the lock it would wait for is not " +
-        "released until that task returns. Declare what a component needs in dependencies() " +
-        "instead, which is what puts it in an earlier wave, or install without a runner.",
+        "released until that task returns. Run this initializer on the installing thread " +
+        "or install without a runner. Declaring dependencies orders creation but does not " +
+        "permit engine reads from a worker, even for completed components.",
 )

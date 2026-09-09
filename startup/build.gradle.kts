@@ -10,11 +10,9 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-val artifactVersion = "3.0.0"
+val artifactVersion = "3.0.1"
 val androidMinSdk = 21
 val androidMinCompileSdk = 34
-val documentedMinSdk = 21
-val documentedMinCompileSdk = 34
 val androidAar = layout.buildDirectory.file("outputs/aar/startup.aar")
 val objCFramework = "Startup"
 val objCHeader = layout.buildDirectory.file(
@@ -155,6 +153,15 @@ fun androidFloors(aar: File): Pair<Int?, Int?> {
             ?.groupValues?.get(1)?.toInt()
 }
 
+val androidFloorDocumentation = mapOf(
+    rootProject.layout.projectDirectory.file("README.md") to Regex(
+        """two Android floors that dependency does:\s+\*\*`minSdk`\s+(\d+)\*\*\s+and\s+\*\*`minCompileSdk`\s+(\d+)\*\*""",
+    ),
+    rootProject.layout.projectDirectory.file("CLAUDE.md") to Regex(
+        """(?m)^-\s+`minSdk\s*=\s*(\d+)`\s+and\s+`aarMetadata\s*\{\s*minCompileSdk\s*=\s*(\d+)\s*\}`,\s+which are exactly the floors""",
+    ),
+)
+
 val checkObjCExport = tasks.register("checkObjCExport") {
     group = "verification"
     description = "Asserts that the Objective-C header exports the registration API Swift can call."
@@ -227,8 +234,9 @@ val checkAndroidFloors = tasks.register("checkAndroidFloors") {
     dependsOn("bundleAndroidMainAar")
     inputs.file(androidAar).withPropertyName("androidAar")
     inputs.files(androidxStartupAar).withPropertyName("androidxStartupAar")
-    inputs.property("documentedMinSdk", documentedMinSdk)
-    inputs.property("documentedMinCompileSdk", documentedMinCompileSdk)
+    inputs.files(androidFloorDocumentation.keys)
+        .withPropertyName("androidFloorDocumentation")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.file(layout.buildDirectory.file("reports/androidFloors.txt"))
     doLast {
         val (ourMinSdk, ourMinCompileSdk) = androidFloors(androidAar.get().asFile)
@@ -250,11 +258,23 @@ val checkAndroidFloors = tasks.register("checkAndroidFloors") {
                 .takeIf { ourMinCompileSdk != null && theirMinCompileSdk != null && ourMinCompileSdk > theirMinCompileSdk },
             "startup.aar declares minCompileSdk $ourMinCompileSdk and $androidxStartupCoordinate declares $theirMinCompileSdk, which api(libs.androidx.startup) puts in every consumer's graph, so checkAarMetadata enforces $theirMinCompileSdk against them whatever this artifact says, and this one understates the floor adopting it imposes."
                 .takeIf { ourMinCompileSdk != null && theirMinCompileSdk != null && ourMinCompileSdk < theirMinCompileSdk },
-            "$androidxStartupCoordinate declares minSdkVersion ${theirMinSdk ?: "none"} and README.md and CLAUDE.md both document $documentedMinSdk, so androidx.startup has moved a floor this library copies by hand. Follow it in the commit that says so in both files and moves artifactVersion, or hold libs.versions.toml at a version that has not moved."
-                .takeIf { theirMinSdk != documentedMinSdk },
-            "$androidxStartupCoordinate declares minCompileSdk ${theirMinCompileSdk ?: "none"} and README.md and CLAUDE.md both document $documentedMinCompileSdk, so androidx.startup has moved a floor this library copies by hand. Follow it in the commit that says so in both files and moves artifactVersion, or hold libs.versions.toml at a version that has not moved."
-                .takeIf { theirMinCompileSdk != documentedMinCompileSdk },
-        )
+        ) + androidFloorDocumentation.flatMap { (document, pattern) ->
+            val name = document.asFile.name
+            val text = runCatching { document.asFile.readText() }.getOrNull()
+                ?: return@flatMap listOf("$name could not be read, so its documented Android floors cannot be checked.")
+            val match = pattern.findAll(text).singleOrNull()
+            val documentedMinSdk = match?.groupValues?.get(1)?.toIntOrNull()
+            val documentedMinCompileSdk = match?.groupValues?.get(2)?.toIntOrNull()
+            if (documentedMinSdk == null || documentedMinCompileSdk == null) {
+                return@flatMap listOf("$name must contain exactly one readable minSdk and minCompileSdk pair in its Android floor statement; examples and release history do not establish the documented requirements.")
+            }
+            listOfNotNull(
+                "$name documents minSdk $documentedMinSdk, but startup.aar declares ${ourMinSdk ?: "none"} and $androidxStartupCoordinate declares ${theirMinSdk ?: "none"}. Update the documented requirement with an intentional floor change, or hold libs.versions.toml at a version that has not moved."
+                    .takeIf { documentedMinSdk != ourMinSdk || documentedMinSdk != theirMinSdk },
+                "$name documents minCompileSdk $documentedMinCompileSdk, but startup.aar declares ${ourMinCompileSdk ?: "none"} and $androidxStartupCoordinate declares ${theirMinCompileSdk ?: "none"}. Update the documented requirement with an intentional floor change, or hold libs.versions.toml at a version that has not moved."
+                    .takeIf { documentedMinCompileSdk != ourMinCompileSdk || documentedMinCompileSdk != theirMinCompileSdk },
+            )
+        }
         outputs.files.singleFile.writeText(failures.joinToString("\n").ifEmpty { "ok" })
         check(failures.isEmpty()) {
             failures.joinToString(

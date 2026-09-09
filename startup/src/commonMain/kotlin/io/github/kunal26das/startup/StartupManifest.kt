@@ -84,6 +84,8 @@ class StartupManifest internal constructor(
             )
         val initializer = try {
             factory()
+        } catch (exception: StartupException) {
+            throw exception
         } catch (throwable: Throwable) {
             throw StartupException(
                 "Cannot initialize ${componentName(component)}.",

@@ -32,10 +32,10 @@ package io.github.kunal26das.startup
  * The guard reaches exactly that far. A task that hands the engine call to a *further*
  * thread, which is what [CoroutineInitializer.createAsync] does when it switches
  * dispatchers, is not covered and still waits forever; so does an ordinary `create` that
- * blocks on a thread it spawned, with or without a runner. Declaring the edge in
- * [Initializer.dependencies] is what makes the call safe from any thread, because that puts
- * the dependency in an earlier wave. A thread that is running no task at all waits as it
- * always did, because its wait does end when the install does.
+ * blocks on a thread it spawned, with or without a runner. Declaring an edge orders the
+ * dependency but does not release this lock: only the installing thread can read it during
+ * the install. A thread that is running no task at all waits as it always did, because its
+ * wait does end when the install does.
  */
 internal class StartupEngine(private val context: Context) {
 
@@ -44,6 +44,10 @@ internal class StartupEngine(private val context: Context) {
     private val initialized = LinkedHashMap<AnyInitializerKey, Any?>()
     private val creating = LinkedHashMap<AnyInitializerKey, Frame>()
     private val waveMembers = LinkedHashSet<AnyInitializerKey>()
+    private val planning = StartupPlanning(
+        creationPaths = { creating.map { (component, frame) -> { pathTo(frame, component) } } },
+        waveRunning = { waveMembers.isNotEmpty() },
+    )
     private var installed: StartupManifest = StartupManifest.Empty
     private var depth = 0
 
@@ -74,7 +78,7 @@ internal class StartupEngine(private val context: Context) {
     fun isEager(component: AnyInitializerKey): Boolean = lock.withLock { installed.isEager(component) }
 
     private fun planFor(roots: List<AnyInitializerKey>): StartupPlan =
-        StartupPlanner.plan(installed, roots, initialized.keys.toSet(), instances)
+        StartupPlanner.plan(installed, roots, initialized.keys.toSet(), instances, planning)
 
     /**
      * The component filed under [key], for a caller that cannot represent its absence.
@@ -263,6 +267,14 @@ internal class StartupEngine(private val context: Context) {
         tasks: List<StartupTask>,
         pending: List<AnyInitializerKey>,
     ): StartupException {
+        val wrappedTask = tasks.firstOrNull { it.wrappedFailure === exception }
+        if (wrappedTask != null) {
+            return StartupException(
+                waveFailureMessage(tasks, pending),
+                wrappedTask.failure,
+                blamedComponents(tasks, pending),
+            )
+        }
         if (exception.components.isNotEmpty()) return exception
         val failed = tasks.filter { it.failure != null }.map { it.component }
         if (failed.isEmpty()) return exception
@@ -294,14 +306,18 @@ internal class StartupEngine(private val context: Context) {
      * Why [component] cannot be created here, given that something already has it in flight.
      *
      * [creating] holds two kinds of entry and they fail for different reasons. A component
-     * an enclosing [Initializer.create] is waiting on is a real cycle, and [reentrantCycle]
+     * an enclosing [Initializer.create] is waiting on is a real cycle, and [StartupPlanning]
      * renders the path that closed it. A component of the wave [executeInWaves] is running
      * is not: two components land in one wave precisely because neither declares the other,
      * so there is no cycle to draw, and rendering one printed an edge that exists in no
-     * `dependencies()` — the same fabricated path [reentrantCycle] exists to avoid.
+     * `dependencies()` — the same fabricated path [StartupPlanning] exists to avoid.
      */
     private fun inFlight(component: AnyInitializerKey, frame: Frame?): StartupException =
-        if (component in waveMembers) waveMemberBarrier(component) else reentrantCycle(component, frame)
+        if (component in waveMembers) {
+            waveMemberBarrier(component)
+        } else {
+            planning.cycle(component, frame?.let { pathTo(it, component) } ?: listOf(component))
+        }
 
     /**
      * The refusal for a component of the wave currently being run.
@@ -312,7 +328,7 @@ internal class StartupEngine(private val context: Context) {
      * another thread is refused earlier, by [StartupLock].
      *
      * It covers a component asking for *itself* too, which is a genuine cycle, and says so
-     * rather than deferring to [reentrantCycle]. The path that walk renders comes from
+     * rather than deferring to [StartupPlanning]. The creation paths that walk uses come from
      * [creating], and under a runner [creating] holds the whole wave rather than a nesting
      * stack, so a self-call in a wave of two printed `Self -> Sibling -> Self` — an edge
      * between components that share a wave precisely because neither declares the other.
@@ -326,38 +342,8 @@ internal class StartupEngine(private val context: Context) {
         listOf(component),
     )
 
-    /**
-     * The cycle a re-entrant [Initializer.create] closed, rendered as a real path.
-     *
-     * [creating] holds the components still in flight, but it is a nesting stack rather
-     * than a chain: neighbours in it need share no edge, because the outer one asked for
-     * something else that merely happened to need the inner one first. Each in-flight
-     * component therefore carries the [Frame] it was created by, and the walk fills in the
-     * hops between one frame at a time, breadth first from the nearest root so the
-     * shortest such path is the one reported. [frame] is the frame the re-entry was found
-     * in, and is null when [initializeComponent] caught it before planning, where the last
-     * step is the imperative call itself.
-     */
-    private fun reentrantCycle(component: AnyInitializerKey, frame: Frame?): StartupException {
-        val stack = creating.keys.toList()
-        val path = ArrayList<AnyInitializerKey>()
-        for (index in stack.indexOf(component)..stack.lastIndex) {
-            val inFlight = stack[index]
-            if (path.isNotEmpty()) {
-                val entered = creating.getValue(inFlight)
-                path.addAll(shortestChain(entered.edges, entered.roots, inFlight))
-            }
-            path.add(inFlight)
-        }
-        if (frame != null) path.addAll(shortestChain(frame.edges, frame.roots, component))
-        path.add(component)
-        val rendered = path.joinToString(" -> ") { componentName(it) }
-        return StartupException(
-            "Cannot initialize ${componentName(component)}. Cycle detected: $rendered",
-            null,
-            path,
-        )
-    }
+    private fun pathTo(frame: Frame, component: AnyInitializerKey): List<AnyInitializerKey> =
+        shortestChain(frame.edges, frame.roots, component) + component
 
     private fun shortestChain(
         edges: Map<AnyInitializerKey, List<AnyInitializerKey>>,
@@ -395,7 +381,7 @@ internal class StartupEngine(private val context: Context) {
     /**
      * What one [execute] call was asked for: the components it started from and the edges
      * its plan discovered. Held for each component while that component is in flight, so
-     * [reentrantCycle] can name the path a nested `create` actually took.
+     * [StartupPlanning] can name the path a nested callback actually took.
      */
     private class Frame(
         val roots: List<AnyInitializerKey>,

@@ -33,8 +33,9 @@ package io.github.kunal26das.startup
  * - **It must not resolve another component from inside [createAsync].** A wave task that
  *   calls [AppInitializer.initializeComponent] is refused at once, but only on the thread
  *   the task body runs on; switching dispatchers moves that call to a thread the guard does
- *   not know about, where it waits for a lock the install cannot release. Declare the edge
- *   in [Initializer.dependencies].
+ *   not know about, where it waits for a lock the install cannot release. Declaring an edge
+ *   orders creation but does not make this lookup safe. Arrange access to the needed data
+ *   before the asynchronous work instead.
  *
  * This is a Kotlin-side type. Kotlin interface default bodies do not become Objective-C
  * protocol defaults, so a Swift class conforming to it inherits neither [create] nor

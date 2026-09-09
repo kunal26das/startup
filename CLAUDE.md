@@ -4,6 +4,24 @@ A Kotlin Multiplatform port of AndroidX App Startup, published as `io.github.kun
 On Android the public API is a set of `typealias`es of `androidx.startup`, with zero wrapper types.
 On the other ten targets it is a hand-written runtime whose order comes from Kahn's algorithm.
 
+## Documentation map
+
+[README.md](README.md) is the consumer entry point: installation, a complete quick start, and
+platform behavior. Keep historical rationale and advanced details in the focused guides:
+
+- [docs/android.md](docs/android.md): automatic startup, XML removal, and registration parity tests.
+- [docs/platform-initializers.md](docs/platform-initializers.md): portable `expect`/`actual` recipes.
+- [docs/swift.md](docs/swift.md): framework export and Swift/Objective-C integration.
+- [docs/runtime.md](docs/runtime.md): composition, diagnostics, runners, and coroutine restrictions.
+- [docs/migration.md](docs/migration.md) and [CHANGELOG.md](CHANGELOG.md): upgrades and version history.
+- [CONTRIBUTING.md](CONTRIBUTING.md): setup, source layout, and focused verification.
+- [sample/README.md](sample/README.md): runnable examples and host requirements.
+
+This file records maintainer conventions and implementation rationale. Keep README examples
+copyable, document their source set and required imports, and distinguish published behavior from
+unreleased changes. The canonical Android floor statements remain in README.md and this file,
+where `checkAndroidFloors` verifies them.
+
 ## House style
 
 - **KDoc on every public declaration.**
@@ -111,7 +129,7 @@ Firebase or AppsFlyer integration takes. It extends `Initializer` rather than `B
 because it genuinely declares a dependency, so its `expect` class must redeclare `create` and
 `dependencies`: `Initializer` carries its members, so an `expect` that omits them fails with "has no
 corresponding expected declaration" on the `actual` side. `RuntimeInfoInitializer` is the third
-shape and the one README.md recommends by default: `expect` over `BaseInitializer`, which carries a
+shape and the one docs/platform-initializers.md recommends by default: `expect` over `BaseInitializer`, which carries a
 concrete `dependencies`, so only `create` is redeclared. It exists in `commonMain` rather than in a
 test source set because `commonMain` is metadata-compiled and a test source set is not; see
 **Verified shapes**. It declares no dependencies, so it has no `Logger` to log to and reports itself
@@ -125,8 +143,9 @@ an `object` compiles on all eleven targets and throws only on Android.
 `SampleStartup.manifest` in step, and from 2.0.0 it does so with no library API at all: it reads the
 XML off disk and compares the `<meta-data>` names against
 `SampleStartup.manifest.eagerComponents.map { it.name }`, which works because on Android an
-`InitializerKey` **is** a `java.lang.Class`. It is now the exact test README.md tells a consumer to
-copy, so the two must not drift apart — change one and change the other. The manifest is declared as
+`InitializerKey` **is** a `java.lang.Class`. docs/android.md demonstrates the same equality contract
+with a parser scoped to the AndroidX provider; the sample's dedicated manifest uses a simpler
+parser. Keep the contract and test-input wiring aligned. The manifest is declared as
 an `inputs.file` on the test task; without that the task stays up to date when the XML changes and
 the assertion silently stops running. The negative control is the point of the whole thing: delete a
 `<meta-data>` line and `:sample:testAndroidHostTest` must fail.
@@ -206,8 +225,8 @@ is now one shape on all eleven targets.
 its place in this library by having an `androidx.startup` counterpart to mirror, not by being useful
 on its own. The Android drift check in particular will look worth reintroducing and is not: the
 problem it addressed is real and is now the consumer's, answered by a parity test of their own, which
-is what `sample`'s `AndroidManifestParityTest` and README.md's **Keep the two Android registries in
-step** demonstrate.
+is what `sample`'s `AndroidManifestParityTest` and docs/android.md's **Keep Android XML and the
+shared graph aligned** demonstrate.
 
 3.0.0 adds four declarations with no counterpart, and each is here because the mirror is *broken*
 without it rather than because it is useful. `WaveRunner`/`StartupTask` and `CoroutineInitializer`
@@ -335,7 +354,7 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
 - `android { }` inside `kotlin { }`, not the AGP-9.4.0-deprecated `androidLibrary { }`.
 - `expect class X() : BaseInitializer<T> { override fun create(context: Context): T }`, with an
   `actual` whose override is spelled `actual override fun create` — the portable platform-specific
-  initializer shape, and the one README.md recommends by default. Redeclaring `create` makes it an
+  initializer shape, and the one docs/platform-initializers.md recommends by default. Redeclaring `create` makes it an
   expected member, which is why the `actual` needs the `actual` modifier; omit it and the compiler
   reports *Declaration must be marked with 'actual'*. `expect class X() : Initializer<T>` has to
   redeclare both members and is only needed when the initializer really does declare dependencies.
@@ -444,15 +463,16 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   a `creating` entry that belongs to the wave being run is refused by name, and every other one is
   still a real cycle rendered as a real path. A component asking for *itself* inside a wave goes
   down the first arm too, and the refusal names that case in so many words. It really is a cycle,
-  but `reentrantCycle` cannot draw it here: the path it renders is stitched from `creating`, which
-  under a runner holds the whole wave rather than a nesting stack, so a self-call in a wave of two
+  but creation paths cannot draw it here: `creating` holds the whole wave rather than a nesting
+  stack, so a self-call in a wave of two
   printed `Self -> Sibling -> Self`. Without a runner it is still `Cycle detected: Self -> Self`,
-  and `StartupRuntimeTest.rejectsAComponentThatAsksForItself` pins that. Declaring the edge in `dependencies()` is what makes a
-  component safe to run in a wave on any thread. On Android the runner is ignored: AndroidX
-  owns creation and offers no seam, so a runner is a performance decision on the other ten targets
-  and never a correctness one. Wish reported the 1.x migration costing it the concurrent startup its
-  hand-rolled runtime had; that is the cost this closes, and README.md's **Running a wave
-  concurrently** is the consumer-facing version.
+  and `StartupRuntimeTest.rejectsAComponentThatAsksForItself` pins that. Declaring an edge orders
+  the dependency into an earlier wave but does not permit worker-thread engine reads. The sample
+  therefore needs a same-thread runner for components that call `AppInitializer`; dispatching the
+  whole graph to workers fails even after their dependencies complete. A mixed runner must keep
+  those tasks on the installing thread and dispatch only worker-safe work. On Android the runner
+  is ignored. docs/runtime.md's **Custom wave runners** documents both ordering and thread
+  requirements.
 - **`CoroutineInitializer` is the one coroutine in the artifact**, added in 3.0.0 against this
   file's own three-release stance, because the stance was answering the wrong question. `suspend` is
   a language feature on all eleven targets; only *blocking a thread to await one* is missing on JS
@@ -517,7 +537,7 @@ failing first.
 ## The planner
 
 `StartupPlanner` lives in `commonMain` as the single copy for all eleven targets, so a regression in
-the ordering rules cannot hide on one platform. Seven properties matter and each has a test:
+the ordering rules cannot hide on one platform. Eight properties matter and each has a test:
 
 1. Kahn with an in-degree map and a FIFO ready queue seeded in declaration order. Every map and set
    is insertion ordered, so the plan is a pure function of declaration order and dependency order.
@@ -541,10 +561,13 @@ the ordering rules cannot hide on one platform. Seven properties matter and each
    the stack directly printed `A -> B -> A` for a graph whose real cycle was `A -> D -> B -> E ->
    A`, naming an edge that exists nowhere and dropping the component that joined the frames. Each
    in-flight component therefore carries the `StartupEngine.Frame` — the roots and
-   `StartupPlan.edges` of the `execute` call that created it — and `reentrantCycle` walks frame by
-   frame, breadth first, filling in the hops between. `StartupPlan.edges` is internal and exists
-   for nothing else. `namesTheComponentThatLinksTwoNestedCreateCalls` nests two levels deep, which
-   is the only shape that catches this; do not delete it.
+   `StartupPlan.edges` of the `execute` call that created it. `StartupPlanning` combines these
+   creation paths with active factory/dependency callback paths, recovering declared hops only
+   when a failure needs a diagnostic. `StartupPlan.edges` remains internal.
+   `namesTheComponentThatLinksTwoNestedCreateCalls` pins the existing creation paths, and
+   `StartupPlanningReentryTest` covers callbacks interleaved with creation. A proven reentry into
+   an enclosing operation while a wave is in flight gets a named refusal, because the wave's
+   unrelated siblings cannot be treated as a call stack.
 7. The engine's map of constructed-but-not-yet-created initializers is emptied when the outermost
    run unwinds, however it ends, and the guard is a `depth` counter rather than
    `creating.isEmpty()`. The map has to outlive a single plan, because `dependencies()` is read at
@@ -560,9 +583,16 @@ the ordering rules cannot hide on one platform. Seven properties matter and each
    `keepsTheOuterPlansInitializersWhenDependenciesResolvesSomething`. Through 1.1.0 the map was a
    field on `StartupManifest`, which `plus` rebuilt per install, so the scope was accidental.
 
+8. Each engine shares a `StartupPlanning` guard across nested plans. It marks the component
+   before invoking its factory or reading its dependencies, and removes that mark in `finally`.
+   Reentering an active callback therefore fails before invoking it a second time; an acyclic
+   nested lookup still shares the initializer cache and runs normally. The planner records BFS
+   parents and defers path reconstruction until a failure, keeping ordinary deep planning linear.
+   Factory-thrown `StartupException` keeps its diagnostic instead of being wrapped again.
+
 ## Where the two runtimes differ
 
-Deliberate, documented in README.md, and not to be "fixed" silently:
+Deliberate, documented in README.md and docs/runtime.md, and not to be "fixed" silently:
 
 - Independent components are ordered by AndroidX's depth-first walk on Android and by Kahn levels
   elsewhere. Both are valid topological orders; only a declared dependency is portable.
@@ -588,8 +618,9 @@ Deliberate, documented in README.md, and not to be "fixed" silently:
   them closed this row of the difference rather than papering over it: the answer on all eleven
   targets is to record what you need from inside your own `create`, which is what `sample`'s
   `SampleReport` already does.
-- `macosX64` and `iosX64` are compiled and linked but never executed anywhere, on this machine or in
-  CI.
+- `macosX64` and `iosX64` Gradle test runners are disabled on an arm64 Mac. A linked binary is not
+  runtime coverage: macOS x64 binaries can be executed separately through Rosetta, while iOS x64
+  requires a compatible simulator runtime. CI currently has no Intel Apple execution job.
 
 ## Build
 
@@ -629,31 +660,21 @@ is exported as `StartupContext` and not under its bare name.
 
 `:sample:checkConsumerObjCExport` links two more frameworks from `sample`, which unlike `:startup`
 is a *consumer* of the library. One exports `:startup` and one does not, and the task greps both:
-the exported header must carry the unprefixed names README.md's Swift snippets use, and the bare one
+the exported header must carry the unprefixed names docs/swift.md's Swift snippets use, and the bare one
 must carry the `Startup`-prefixed names and no `InitializerKeyKt`. That pair is the only place this
 repository sees the framework shape an application actually gets.
 
-`:startup:checkAndroidFloors` unzips `startup/build/outputs/aar/startup.aar` and fails if
-`minSdkVersion` rises above 21 or `minCompileSdk` above 34, which are `androidx.startup`'s own
-floors. It needs no Mac.
+`:startup:checkAndroidFloors` reads the published AAR, the resolved AndroidX AAR, and the
+canonical Android floor declarations in README.md and this file. Both artifacts and both documents
+must declare the same `minSdk` and `minCompileSdk`; missing declarations fail too. The documents
+and resolved AAR are task inputs, so changing either reruns the check. It needs no Mac.
 
 The two Objective-C tasks are `onlyIf { HostManager.hostIsMac }`, so a Linux or Windows runner skips
 them.
 
-Running the sample, one target at a time:
-
-```
-./gradlew :sample:desktopRun
-./gradlew :sample:runDebugExecutableMacosArm64
-./gradlew :sample:jsNodeRun :sample:wasmJsNodeRun
-./gradlew :sample:jsBrowserRun
-./gradlew :sample:wasmJsBrowserRun
-./gradlew :androidApp:installDebug
-./gradlew :sample:iosSimulatorApp
-xcrun simctl boot "iPhone 17 Pro Max"
-xcrun simctl install booted sample/build/iosApp/SampleApp.app
-xcrun simctl launch --console booted io.github.kunal26das.startup.sample.app
-```
+Run the sample using [sample/README.md](sample/README.md). It lists native-host commands,
+simulator selection, expected output, and optional translation environments. Keep executable
+instructions there so host setup and target limitations have one maintained reference.
 
 `jsNodeRun`, `jsBrowserRun`, `wasmJsNodeRun` and `wasmJsBrowserRun` are aliases registered in
 `sample/build.gradle.kts`. Kotlin 2.4 only creates the `...DevelopmentRun` and `...ProductionRun`
@@ -668,9 +689,9 @@ prints `BrowserCrashReporter` under Node, because Kotlin/JS has one `jsMain` for
 and macOS and iOS both print `AppleCrashReporter`, because `appleMain` is one source set. Neither is
 a bug; neither is evidence of which environment ran.
 
-`linuxX64` and `mingwX64` cannot be executed on a macOS host at all — the artifacts are an x86-64
-ELF binary and a PE32+ executable, and both fail with `exec format error`. Link them here, run them
-on Linux and Windows.
+`linuxX64` and `mingwX64` cannot be executed directly by macOS: the artifacts are an x86-64 ELF
+binary and a PE32+ executable. Run them on their native hosts or in a compatible Linux/Wine
+environment, and report which environment actually executed them. See sample/README.md.
 
 Adding a web executable pulls `webpack-dev-server` into the yarn workspace, so the first build after
 that change fails `kotlinStoreYarnLock` until `./gradlew kotlinUpgradeYarnLock` is run.

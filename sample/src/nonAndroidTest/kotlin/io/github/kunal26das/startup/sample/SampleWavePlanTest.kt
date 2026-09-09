@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 
 /**
  * The shared manifest's declared edges really do separate its components into waves, which is
- * what makes it installable under a `WaveRunner`: a task may read back only what an earlier
- * wave created.
+ * what makes it installable under a same-thread `WaveRunner`: these initializers read back
+ * components from earlier waves and must remain on the installing thread.
  *
  * This asserts on a [StartupPlanner] plan rather than on an install, and that is deliberate.
  * `Startup` is a process singleton and every test in this module shares it, so by the time any
