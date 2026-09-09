@@ -44,7 +44,10 @@ The Android artifact depends on `androidx.startup:startup-runtime` with `api` sc
 consumer can implement `Initializer` without declaring AndroidX itself, and it publishes the same
 two Android floors that dependency does: **`minSdk` 21** and **`minCompileSdk` 34**. Adopting this
 library never narrows the device range or forces a `compileSdk` move relative to plain
-`androidx.startup`; `:startup:checkAndroidFloors` fails the build if either floor rises.
+`androidx.startup`, and it never understates one either, because `api` puts that AAR in every
+consumer's graph whatever this one declares. `:startup:checkAndroidFloors` reads both floors out of
+the dependency's own AAR and fails the build unless this artifact, that one, and the two numbers
+printed here are the same pair.
 
 Two requirements come from the way the artifacts are compiled:
 
@@ -1116,8 +1119,9 @@ module. Three verification tasks run beside the tests:
   library: one exports `:startup` and one does not. It asserts that the first carries the names the
   Swift snippets above use and the second carries the `Startup`-prefixed ones with no
   `InitializerKeyKt`, so the difference `export(...)` makes stays true.
-- `:startup:checkAndroidFloors` unzips the published AAR and fails if `minSdkVersion` rises above 21
-  or `minCompileSdk` above 34.
+- `:startup:checkAndroidFloors` unzips the published AAR and the `androidx.startup` AAR it resolves
+  from the version catalog, and fails unless the two declare the same `minSdkVersion` and the same
+  `minCompileSdk` — and unless that pair is still the 21 and 34 printed at the top of this file.
 
 The first two need a macOS host and skip elsewhere; the third runs anywhere.
 

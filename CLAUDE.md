@@ -309,7 +309,11 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   `implementation` the published POM emits `<scope>runtime</scope>` and a downstream Android
   consumer cannot compile `class X : Initializer<Y>`.
 - `minSdk = 21` and `aarMetadata { minCompileSdk = 34 }`, which are exactly the floors
-  `androidx.startup:startup-runtime:1.2.0` publishes. Neither may rise. As of 2.0.0 `androidMain`
+  `androidx.startup:startup-runtime` publishes at the version `libs.versions.toml` names —
+  `:startup:checkAndroidFloors` resolves that AAR and reads them, rather than taking this sentence's
+  word for it. Neither may rise, and neither may fall: `api(libs.androidx.startup)` puts that AAR in
+  every consumer's graph, so a lower floor is a number this artifact cannot keep. As of 2.0.0
+  `androidMain`
   calls no `android.*` method at all — it is `typealias`es plus a loop over
   `AppInitializer.initializeComponent`. Through 1.1.0 it reached `ComponentName.getClassName`,
   `Context.getPackageManager`, `Context.getPackageName`, `PackageManager.getProviderInfo`,
@@ -321,7 +325,11 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   that publishes the newest SDK in existence forces every consumer to move `compileSdk` to adopt it.
   `compileSdk` stays at 37; it is the level this repository builds against and it does not reach the
   published metadata now that `aarMetadata` pins it. `:startup:checkAndroidFloors` unzips
-  `build/outputs/aar/startup.aar` and fails on either value. Both floors were wrong before
+  `build/outputs/aar/startup.aar` and the resolved `androidx.startup` AAR and fails unless both
+  declare the same two numbers, and unless those are still the documented pair. Downgrading
+  `androidx-startup` in `libs.versions.toml` to 1.1.1, which declared 14 and 31, is the negative
+  control, and it needs no `--rerun-tasks` because the resolved AAR is a task input. Both floors
+  were wrong before
   1.0.0 and neither was visible in this repository's own build, because `sample` and `androidApp`
   were written against the same numbers.
 - `android { }` inside `kotlin { }`, not the AGP-9.4.0-deprecated `androidLibrary { }`.

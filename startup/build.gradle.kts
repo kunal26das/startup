@@ -12,9 +12,9 @@ plugins {
 
 val artifactVersion = "3.0.0"
 val androidMinSdk = 21
-val androidxStartupMinSdk = 21
-val androidxStartupMinCompileSdk = 34
 val androidMinCompileSdk = 34
+val documentedMinSdk = 21
+val documentedMinCompileSdk = 34
 val androidAar = layout.buildDirectory.file("outputs/aar/startup.aar")
 val objCFramework = "Startup"
 val objCHeader = layout.buildDirectory.file(
@@ -123,6 +123,38 @@ kotlin {
     }
 }
 
+val androidxStartupCoordinate = libs.androidx.startup.get().let { "${it.module}:${it.version}" }
+
+val androidxStartupAarScope = configurations.dependencyScope("androidxStartupAarScope")
+
+val androidxStartupAar = configurations.resolvable("androidxStartupAar") {
+    extendsFrom(androidxStartupAarScope.get())
+    isTransitive = false
+}
+
+dependencies.addProvider(
+    androidxStartupAarScope.name,
+    libs.androidx.startup.map { "${it.module}:${it.version}@aar" },
+)
+
+fun androidFloors(aar: File): Pair<Int?, Int?> {
+    val archive = ZipFile(aar)
+    val entries = try {
+        listOf("AndroidManifest.xml", "META-INF/com/android/build/gradle/aar-metadata.properties")
+            .associateWith { name ->
+                val entry = archive.getEntry(name)
+                if (entry == null) "" else archive.getInputStream(entry).reader().readText()
+            }
+    } finally {
+        archive.close()
+    }
+    return Regex("android:minSdkVersion=\"(\\d+)\"")
+        .find(entries.getValue("AndroidManifest.xml"))?.groupValues?.get(1)?.toInt() to
+        Regex("(?m)^minCompileSdk=(\\d+)$")
+            .find(entries.getValue("META-INF/com/android/build/gradle/aar-metadata.properties"))
+            ?.groupValues?.get(1)?.toInt()
+}
+
 val checkObjCExport = tasks.register("checkObjCExport") {
     group = "verification"
     description = "Asserts that the Objective-C header exports the registration API Swift can call."
@@ -191,35 +223,44 @@ val checkObjCExport = tasks.register("checkObjCExport") {
 
 val checkAndroidFloors = tasks.register("checkAndroidFloors") {
     group = "verification"
-    description = "Asserts that the published AAR raises neither floor above androidx.startup's."
+    description = "Asserts that this library's AAR, androidx.startup's AAR and the documented pair declare the same two Android floors."
     dependsOn("bundleAndroidMainAar")
     inputs.file(androidAar).withPropertyName("androidAar")
+    inputs.files(androidxStartupAar).withPropertyName("androidxStartupAar")
+    inputs.property("documentedMinSdk", documentedMinSdk)
+    inputs.property("documentedMinCompileSdk", documentedMinCompileSdk)
     outputs.file(layout.buildDirectory.file("reports/androidFloors.txt"))
     doLast {
-        val archive = ZipFile(androidAar.get().asFile)
-        val entries = try {
-            listOf("AndroidManifest.xml", "META-INF/com/android/build/gradle/aar-metadata.properties")
-                .associateWith { name ->
-                    val entry = archive.getEntry(name)
-                    if (entry == null) "" else archive.getInputStream(entry).reader().readText()
-                }
-        } finally {
-            archive.close()
-        }
-        val minSdk = Regex("android:minSdkVersion=\"(\\d+)\"")
-            .find(entries.getValue("AndroidManifest.xml"))?.groupValues?.get(1)?.toInt()
-        val minCompileSdk = Regex("(?m)^minCompileSdk=(\\d+)$")
-            .find(entries.getValue("META-INF/com/android/build/gradle/aar-metadata.properties"))
-            ?.groupValues?.get(1)?.toInt()
+        val (ourMinSdk, ourMinCompileSdk) = androidFloors(androidAar.get().asFile)
+        val (theirMinSdk, theirMinCompileSdk) = androidFloors(androidxStartupAar.get().singleFile)
         val failures = listOfNotNull(
-            "The AAR declares minSdkVersion $minSdk. androidx.startup:startup-runtime declares $androidxStartupMinSdk, so anything above that fails a lower consumer's manifest merger for a wrapper that calls nothing newer than API 1."
-                .takeIf { minSdk == null || minSdk > androidxStartupMinSdk },
-            "The AAR declares minCompileSdk $minCompileSdk. androidx.startup:startup-runtime declares $androidxStartupMinCompileSdk, so anything above that forces every consumer to move compileSdk, and checkAarMetadata has no override."
-                .takeIf { minCompileSdk == null || minCompileSdk > androidxStartupMinCompileSdk },
+            "startup.aar carries no android:minSdkVersion in its AndroidManifest.xml, so the artifact records no device range at all and nothing here can be held against $androidxStartupCoordinate."
+                .takeIf { ourMinSdk == null },
+            "$androidxStartupCoordinate carries no android:minSdkVersion in its AndroidManifest.xml, so the floor this library mirrors cannot be read and nothing here can say whether the two artifacts still agree."
+                .takeIf { theirMinSdk == null },
+            "startup.aar declares minSdkVersion $ourMinSdk and $androidxStartupCoordinate declares $theirMinSdk, so this artifact narrows the device range a plain androidx.startup application already reaches and fails a lower consumer's manifest merger, for a wrapper that calls nothing newer than API 1."
+                .takeIf { ourMinSdk != null && theirMinSdk != null && ourMinSdk > theirMinSdk },
+            "startup.aar declares minSdkVersion $ourMinSdk and $androidxStartupCoordinate declares $theirMinSdk, which api(libs.androidx.startup) puts in every consumer's graph, so the manifest merger enforces $theirMinSdk however low this artifact goes and the lower number is one it cannot keep."
+                .takeIf { ourMinSdk != null && theirMinSdk != null && ourMinSdk < theirMinSdk },
+            "startup.aar carries no minCompileSdk in META-INF/com/android/build/gradle/aar-metadata.properties, so the artifact records no compileSdk requirement at all and nothing here can be held against $androidxStartupCoordinate."
+                .takeIf { ourMinCompileSdk == null },
+            "startup.aar declares minCompileSdk $ourMinCompileSdk and $androidxStartupCoordinate declares none at all, so adopting this library constrains a consumer's compileSdk where plain androidx.startup constrains it not at all, and checkAarMetadata is unconditional and has no override."
+                .takeIf { ourMinCompileSdk != null && theirMinCompileSdk == null },
+            "startup.aar declares minCompileSdk $ourMinCompileSdk and $androidxStartupCoordinate declares $theirMinCompileSdk, so this artifact forces every consumer to move compileSdk where that dependency does not, and checkAarMetadata has no override."
+                .takeIf { ourMinCompileSdk != null && theirMinCompileSdk != null && ourMinCompileSdk > theirMinCompileSdk },
+            "startup.aar declares minCompileSdk $ourMinCompileSdk and $androidxStartupCoordinate declares $theirMinCompileSdk, which api(libs.androidx.startup) puts in every consumer's graph, so checkAarMetadata enforces $theirMinCompileSdk against them whatever this artifact says, and this one understates the floor adopting it imposes."
+                .takeIf { ourMinCompileSdk != null && theirMinCompileSdk != null && ourMinCompileSdk < theirMinCompileSdk },
+            "$androidxStartupCoordinate declares minSdkVersion ${theirMinSdk ?: "none"} and README.md and CLAUDE.md both document $documentedMinSdk, so androidx.startup has moved a floor this library copies by hand. Follow it in the commit that says so in both files and moves artifactVersion, or hold libs.versions.toml at a version that has not moved."
+                .takeIf { theirMinSdk != documentedMinSdk },
+            "$androidxStartupCoordinate declares minCompileSdk ${theirMinCompileSdk ?: "none"} and README.md and CLAUDE.md both document $documentedMinCompileSdk, so androidx.startup has moved a floor this library copies by hand. Follow it in the commit that says so in both files and moves artifactVersion, or hold libs.versions.toml at a version that has not moved."
+                .takeIf { theirMinCompileSdk != documentedMinCompileSdk },
         )
         outputs.files.singleFile.writeText(failures.joinToString("\n").ifEmpty { "ok" })
         check(failures.isEmpty()) {
-            failures.joinToString("\n", prefix = "The Android artifact narrowed what a consumer may be built against.\n")
+            failures.joinToString(
+                "\n",
+                prefix = "The two Android floors no longer agree. startup.aar, $androidxStartupCoordinate and the pair README.md and CLAUDE.md document have to be the same two numbers.\n",
+            )
         }
     }
 }
