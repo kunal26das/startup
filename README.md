@@ -8,7 +8,8 @@ directly through type aliases. On other platforms, it supplies a runtime with ex
 cached results, and cycle diagnostics. Initialization is sequential on the calling thread by default.
 
 [Quick start](#quick-start) · [Android setup](docs/android.md) · [Swift](docs/swift.md) ·
-[Run the sample](sample/README.md) · [Contribute](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[Run the sample](sample/README.md) · [Wiki](https://github.com/kunal26das/startup/wiki) ·
+[Contribute](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Installation
 
