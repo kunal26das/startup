@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1b1916">
+    <meta name="description" content="Initialize your Kotlin Multiplatform app in dependency order. Shared initializers, AndroidX on Android, and explicit startup across eleven targets.">
+    <title>Startup — Kotlin Multiplatform initialization, in order</title>
+    <link rel="canonical" href="https://kunal26das.github.io/startup/">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="assets/lora-semibold.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="site.css">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Startup — initialization, in order">
+    <meta property="og:description" content="One shared initialization graph for Kotlin Multiplatform. Dependencies first, across eleven targets.">
+    <meta property="og:url" content="https://kunal26das.github.io/startup/">
+    <meta name="twitter:card" content="summary">
+    <script src="theme.js"></script>
+    <script src="site.js" defer></script>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "Startup",
+        "description": "A Kotlin Multiplatform port of AndroidX App Startup.",
+        "url": "https://kunal26das.github.io/startup/",
+        "codeRepository": "https://github.com/kunal26das/startup",
+        "programmingLanguage": "Kotlin",
+        "version": "3.0.1",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "author": {"@type": "Person", "name": "Kunal Das", "url": "https://kunal26das.github.io/"}
+    }
+    </script>
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="shell header-inner">
+            <div class="brand-group">
+                <a class="portfolio-brand" href="https://kunal26das.github.io/" aria-label="Kunal Das portfolio">KD</a>
+                <a class="brand-name" href="./" aria-label="Startup home">Startup</a>
+            </div>
+            <nav class="desktop-nav" aria-label="Main navigation">
+                <a href="#get-started">Get started</a>
+                <a href="#platforms">Platforms</a>
+                <a href="#guides">Guides</a>
+                <a href="https://github.com/kunal26das/startup">GitHub <span aria-hidden="true">↗</span></a>
+            </nav>
+            <div class="header-actions">
+                <button class="theme-toggle" type="button" aria-label="Switch to light theme" hidden>Light</button>
+                <details class="mobile-menu">
+                    <summary>Menu</summary>
+                    <nav aria-label="Mobile navigation">
+                        <a href="#get-started">Get started</a>
+                        <a href="#platforms">Platforms</a>
+                        <a href="#guides">Guides</a>
+                        <a href="https://github.com/kunal26das/startup">GitHub <span aria-hidden="true">↗</span></a>
+                    </nav>
+                </details>
+            </div>
+        </div>
+    </header>
+
+    <main id="main">
+        <section class="shell hero" aria-labelledby="hero-title">
+            <div class="hero-copy">
+                <div class="project-meta">
+                    <span>Kotlin Multiplatform</span>
+                    <a href="https://github.com/kunal26das/startup/releases/tag/v3.0.1">v3.0.1 <span aria-hidden="true">↗</span></a>
+                </div>
+                <h1 id="hero-title">Startup,<br><em>in the right order.</em></h1>
+                <p class="hero-description">One shared initialization graph. Write your initializers once, declare what they depend on, and let dependencies start first.</p>
+                <div class="hero-actions">
+                    <a class="button primary-button" href="#get-started">Get started <span aria-hidden="true">↘</span></a>
+                    <a class="text-link" href="https://github.com/kunal26das/startup">View source <span aria-hidden="true">↗</span></a>
+                </div>
+            </div>
+            <figure class="dependency-demo" aria-labelledby="graph-title">
+                <figcaption id="graph-title">A little order goes a long way.</figcaption>
+                <p class="graph-description">Analytics needs the network.<br>The network needs a logger.</p>
+                <ol class="graph-nodes" aria-label="Illustrated initialization order">
+                    <li class="graph-node" data-step="0">
+                        <span class="node-index" aria-hidden="true">1</span>
+                        <span class="node-name">Logger</span>
+                        <span class="node-state">First</span>
+                    </li>
+                    <li class="graph-node" data-step="1">
+                        <span class="node-index" aria-hidden="true">2</span>
+                        <span class="node-name">Network</span>
+                        <span class="node-state">Then</span>
+                    </li>
+                    <li class="graph-node" data-step="2">
+                        <span class="node-index" aria-hidden="true">3</span>
+                        <span class="node-name">Analytics</span>
+                        <span class="node-state">Last</span>
+                    </li>
+                </ol>
+                <div class="demo-controls" hidden>
+                    <button class="demo-button" id="demo-next" type="button">Start Logger <span aria-hidden="true">→</span></button>
+                    <p class="demo-status" id="demo-status" role="status" aria-live="polite" aria-atomic="true">Step through a startup sequence.</p>
+                </div>
+                <p class="graph-footnote">A dependency-order illustration. Sequential by default.</p>
+            </figure>
+        </section>
+
+        <div class="shell principles">
+            <div>
+                <h2>Shared definitions</h2>
+                <p>Keep initializers and their dependencies in <code>commonMain</code>. Start eagerly or resolve on demand.</p>
+            </div>
+            <div>
+                <h2>AndroidX on Android</h2>
+                <p>Direct type aliases to AndroidX App Startup. The familiar provider and manifest do the work.</p>
+            </div>
+            <div>
+                <h2>Check before launch</h2>
+                <p>Catch cycles, missing registrations, and mismatched factories with <code>StartupPlanner</code>.</p>
+            </div>
+        </div>
+
+        <section class="shell content-section setup-section" id="get-started" aria-labelledby="setup-title">
+            <div class="section-intro">
+                <h2 id="setup-title">A small addition.<br>A clear beginning.</h2>
+                <p>Add Startup to your shared module, define your initializers, and register the graph.</p>
+                <dl class="requirements">
+                    <div><dt>Kotlin</dt><dd>2.4 or newer</dd></div>
+                    <div><dt>JVM target</dt><dd>11 or newer</dd></div>
+                    <div><dt>Android</dt><dd>minSdk 21 · compileSdk 34+</dd></div>
+                </dl>
+                <p class="small-copy">Dependency repositories need <code>mavenCentral()</code> and <code>google()</code>.</p>
+            </div>
+            <div class="setup-content">
+                <div class="code-block">
+                    <div class="code-heading">
+                        <span>build.gradle.kts</span>
+                        <button class="copy-button" type="button" data-copy="install-code" aria-label="Copy Gradle dependency" hidden>Copy</button>
+                    </div>
+                    <pre tabindex="0" aria-label="Gradle dependency code"><code id="install-code">kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("io.github.kunal26das:startup:3.0.1")
+        }
+    }
+}</code></pre>
+                </div>
+                <div class="recipe-intro">
+                    <h3>Describe what starts, and when.</h3>
+                    <p>Once your initializer classes exist, register them in shared code. In this example, <code>AnalyticsInitializer</code> declares <code>LoggerInitializer</code> as a dependency, so the logger is created first.</p>
+                </div>
+                <div class="code-block">
+                    <div class="code-heading">
+                        <span>commonMain / AppStartup.kt</span>
+                        <button class="copy-button" type="button" data-copy="manifest-code" aria-label="Copy startup manifest" hidden>Copy</button>
+                    </div>
+                    <pre tabindex="0" aria-label="Startup manifest code"><code id="manifest-code">import io.github.kunal26das.startup.StartupManifest
+
+/** The shared startup graph. */
+val appStartup = StartupManifest {
+    lazyInitializer&lt;LoggerInitializer&gt; { LoggerInitializer() }
+    metaData&lt;AnalyticsInitializer&gt; { AnalyticsInitializer() }
+}</code></pre>
+                </div>
+                <p class="copy-status" role="status" aria-live="polite" aria-atomic="true"></p>
+                <p class="recipe-note">Lazy components still start when an eager component needs them. On Android, declare eager initializers in XML too. On other platforms, call <code>Startup.install</code> from your entry point.</p>
+                <a class="text-link" href="https://github.com/kunal26das/startup#quick-start">Follow the complete quick start <span aria-hidden="true">↗</span></a>
+            </div>
+        </section>
+
+        <section class="shell content-section platform-section" id="platforms" aria-labelledby="platform-title">
+            <div class="section-intro">
+                <h2 id="platform-title">One graph.<br>Every entry point.</h2>
+                <p>Eleven published targets. Share the dependency model, then connect startup to each platform’s lifecycle.</p>
+                <a class="text-link" href="https://github.com/kunal26das/startup/wiki/Platform-Specific-Initializers">Write platform initializers <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="platform-content">
+                <table class="platform-table">
+                    <caption>Published platforms and startup paths</caption>
+                    <thead><tr><th scope="col">Platform</th><th scope="col">Targets</th><th scope="col">Startup path</th></tr></thead>
+                    <tbody>
+                        <tr><th scope="row">Android</th><td>Android</td><td>AndroidX provider + XML</td></tr>
+                        <tr><th scope="row">JVM</th><td>Desktop / server</td><td><code>Startup.install</code></td></tr>
+                        <tr><th scope="row">iOS</th><td>ARM64 device<br>ARM64 + x64 simulator</td><td>Kotlin or Swift entry point</td></tr>
+                        <tr><th scope="row">macOS</th><td>ARM64 + x64</td><td><code>Startup.install</code></td></tr>
+                        <tr><th scope="row">Linux</th><td>x64</td><td><code>Startup.install</code></td></tr>
+                        <tr><th scope="row">Windows</th><td>MinGW x64</td><td><code>Startup.install</code></td></tr>
+                        <tr><th scope="row">JavaScript</th><td>Browser + Node.js</td><td><code>Startup.install</code></td></tr>
+                        <tr><th scope="row">WebAssembly</th><td>Wasm/JS</td><td><code>Startup.install</code></td></tr>
+                    </tbody>
+                </table>
+                <div class="platform-notes">
+                    <p><strong>Android registration is explicit.</strong> The Kotlin manifest does not generate Android XML. Initializers need a public no-argument constructor.</p>
+                    <p><strong>Web startup is synchronous.</strong> Ordinary initializers work on JS and Wasm. The blocking <code>CoroutineInitializer</code> bridge is unsupported on these targets.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="shell content-section guides-section" id="guides" aria-labelledby="guides-title">
+            <div class="guides-heading">
+                <h2 id="guides-title">Go a little deeper.</h2>
+                <a class="text-link" href="https://github.com/kunal26das/startup/wiki">Browse the wiki <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="guide-grid">
+                <a class="guide" href="https://github.com/kunal26das/startup/wiki/Android-Startup">
+                    <h3>Android startup <span aria-hidden="true">↗</span></h3>
+                    <p>Automatic initialization, manual startup, and keeping XML in step with your shared graph.</p>
+                </a>
+                <a class="guide" href="https://github.com/kunal26das/startup/wiki/Swift-and-Objective-C">
+                    <h3>Swift &amp; Objective-C <span aria-hidden="true">↗</span></h3>
+                    <p>Export your framework and connect an Apple host to the same initialization graph.</p>
+                </a>
+                <a class="guide" href="https://github.com/kunal26das/startup/wiki/Runtime-and-API">
+                    <h3>The runtime <span aria-hidden="true">↗</span></h3>
+                    <p>Compose manifests, inspect diagnostics, and understand runners and coroutine restrictions.</p>
+                </a>
+                <a class="guide" href="https://github.com/kunal26das/startup/wiki/Run-the-Sample">
+                    <h3>Run the sample <span aria-hidden="true">↗</span></h3>
+                    <p>See shared and platform-specific initializers in a runnable app, with commands for each host.</p>
+                </a>
+                <a class="guide" href="https://github.com/kunal26das/startup/wiki/Migration-Guide">
+                    <h3>Upgrading Startup <span aria-hidden="true">↗</span></h3>
+                    <p>Check behavior changes and migration steps before moving an existing application forward.</p>
+                </a>
+                <a class="guide" href="https://github.com/kunal26das/startup/wiki/Contributing">
+                    <h3>Make it better <span aria-hidden="true">↗</span></h3>
+                    <p>Find your way through the codebase, choose focused checks, and contribute a change.</p>
+                </a>
+            </div>
+            <a class="essay-link" href="https://kunal26das.github.io/blog/startup-dependency-graph/">
+                <span>Notes from the build</span>
+                <span class="essay-title">Why app startup is a dependency graph problem.</span>
+                <span class="essay-action">Read the engineering story <span aria-hidden="true">↗</span></span>
+            </a>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="shell footer-inner">
+            <div class="footer-credit">Made by <a href="https://kunal26das.github.io/">Kunal Das <span aria-hidden="true">↗</span></a><span>Part of a collection of useful things.</span></div>
+            <nav aria-label="Project resources">
+                <a href="https://github.com/kunal26das/startup">GitHub</a>
+                <a href="https://central.sonatype.com/artifact/io.github.kunal26das/startup">Maven Central</a>
+                <a href="https://klibs.io/project/kunal26das/startup">Klibs</a>
+                <a href="https://github.com/kunal26das/startup/blob/main/LICENSE">Apache 2.0</a>
+            </nav>
+        </div>
+    </footer>
+</body>
+</html>

@@ -124,3 +124,31 @@ commands you ran and note platforms you could not execute. Reports are under eac
   with eager entries kept in sync between the shared manifest and Android XML.
 - Update relevant documentation with API or behavior changes. Explain the resulting behavior and
   validation in the pull request. Release tagging and publishing are separate maintainer steps.
+
+## Maintain the website
+
+The [project website](https://kunal26das.github.io/startup/) is plain HTML, CSS, and JavaScript in
+`site/`. It needs no Gradle build, npm packages, or release credentials. Keep installation examples
+in sync with the README and preserve the bundled font's license when changing assets.
+
+From the repository root, validate the pages and preview them with Python 3.9 or newer and Node.js:
+
+```sh
+python3 scripts/check-site.py
+node --check site/site.js
+node --check site/theme.js
+python3 -m http.server 8000 --directory site
+```
+
+Open `http://localhost:8000/` and stop the server with Ctrl+C. On Windows, use `py -3` in place of
+`python3`. Check narrow and wide layouts, both color themes, keyboard navigation, and copy buttons.
+The validator checks HTML structure, duplicate IDs, local HTML anchors, and HTML/CSS asset paths;
+it does not fetch external links. Keep local URLs relative, or rooted at `/startup/` for deployment.
+Rooted `/startup/` URLs need a preview server mounted at that same path.
+
+[Website CI](.github/workflows/pages.yml) validates pull requests without publishing them. Changes
+to `site/`, its validator, or the workflow deploy from `main` after validation. Maintainers can also
+run **Website** manually from the Actions tab with the `main` branch selected. Repository Settings
+→ Pages must use **GitHub Actions** as the source. The workflow uploads only `site/` and deploys to
+the `github-pages` environment; the Actions run links to the resulting deployment. Library releases
+remain independent of website deployment.
