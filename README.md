@@ -32,7 +32,7 @@ Use `api` plus framework `export(...)` when Swift needs these types; follow the
 
 | Requirement | Value |
 | --- | --- |
-| Kotlin compiler | 2.4 or newer; this repository builds with 2.4.10 |
+| Kotlin compiler | 2.4 or newer; this repository builds with 2.4.20 |
 | JVM bytecode target | 11 or newer, including Android consumers |
 | Android devices | API 21 or newer |
 | Android compile SDK | 34 or newer |
