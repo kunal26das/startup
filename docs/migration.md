@@ -5,10 +5,30 @@ Apply each version's changes after the version you currently use. Use the
 
 | Current version | Sections to apply |
 | --- | --- |
-| 1.x | 2.0.0 removals, 2.1.0 factory validation, then 3.0.0 API changes |
-| 2.0.0 | 2.1.0 factory validation, then 3.0.0 API changes |
-| 2.1.0 | 3.0.0 API changes |
-| 3.0.0 | 3.0.1 task failure and runner checks |
+| 1.x | 2.0.0 removals, 2.1.0 factory validation, 3.0.0 API changes, 3.0.1 task handling, then 4.0.0 dependency update |
+| 2.0.0 | 2.1.0 factory validation, 3.0.0 API changes, 3.0.1 task handling, then 4.0.0 dependency update |
+| 2.1.0 | 3.0.0 API changes, 3.0.1 task handling, then 4.0.0 dependency update |
+| 3.0.0 | 3.0.1 task failure and runner checks, then 4.0.0 dependency update |
+| 3.0.1 | 4.0.0 dependency update |
+
+## From 3.0.1 to 4.0.0
+
+Update the dependency in your shared module's `commonMain.dependencies` block:
+
+```kotlin
+implementation("io.github.kunal26das:startup:4.0.0")
+```
+
+This release preserves the public Kotlin and Swift APIs and startup behavior from 3.0.1. Existing
+initializers, manifests, runners, and Swift calls keep the same contracts; no application API
+migration is required.
+
+The library is now built with Kotlin 2.4.20. Use that version to match the release toolchain. The
+consumer requirements remain Kotlin 2.4 or newer, JVM target 11 or newer, and Android `minSdk` 21
+with `compileSdk` 34 or newer. See the [installation guide](../README.md#installation).
+
+If your shared framework exports Startup to Swift, update both its `api(...)` dependency and
+`export(...)` declaration to 4.0.0. The [Swift guide](swift.md) shows the complete configuration.
 
 ## From 3.0.0 to 3.0.1
 

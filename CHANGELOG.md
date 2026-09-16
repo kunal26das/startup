@@ -3,6 +3,22 @@
 Migration instructions are in the [migration guide](docs/migration.md). Dependency coordinates are
 in the [installation guide](README.md#installation).
 
+## 4.0.0 — 2026-09-17
+
+The public Kotlin and Swift APIs and startup behavior are unchanged from 3.0.1.
+
+### Changed
+
+- Build the library and sample with Kotlin 2.4.20 instead of 2.4.10. JVM target 11 and the Android
+  requirements remain unchanged.
+- Add the project website and link the published developer wiki from the README. Document website
+  maintenance and add HTML, asset, and JavaScript checks with GitHub Pages deployment.
+
+### Fixed
+
+- Install `platform-tools` explicitly during Android SDK setup in build and release CI, avoiding
+  failures caused by the obsolete `tools` package.
+
 ## 3.0.1 — 2026-09-09
 
 ### Changed
