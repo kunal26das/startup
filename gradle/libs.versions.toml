@@ -1,5 +1,5 @@
 [versions]
-android-gradle-plugin = "9.4.0"
+android-gradle-plugin = "9.4.1"
 androidx-startup = "1.2.0"
 kotlin = "2.4.20"
 kotlinx-coroutines = "1.11.0"
