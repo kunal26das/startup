@@ -20,7 +20,7 @@ Add the dependency to your shared module's `build.gradle.kts`:
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.kunal26das:startup:4.0.0")
+            implementation("io.github.kunal26das:startup:4.0.1")
         }
     }
 }
@@ -41,7 +41,7 @@ The Android artifact exposes `androidx.startup:startup-runtime` as an API depend
 two Android floors that dependency does: **`minSdk` 21** and **`minCompileSdk` 34**.
 The build checks these values against both AARs and the documentation.
 
-Dependency examples use **4.0.0**. See the [changelog](CHANGELOG.md) for fixes and the
+Dependency examples use **4.0.1**. See the [changelog](CHANGELOG.md) for fixes and the
 [migration guide](docs/migration.md) for behavior changes when upgrading.
 
 ## Quick start

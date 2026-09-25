@@ -3,7 +3,7 @@
 Export `startup` from your Kotlin framework, then use its explicit-key API from Swift.
 The examples below use a framework named `Shared`; replace that import with your framework name.
 
-Dependency examples use **4.0.0**, which includes the task failure fixes described under
+Dependency examples use **4.0.1**, which includes the task failure fixes described under
 [Failures and versions](#failures-and-versions).
 For installation and shared Kotlin initializers, see the [README](../README.md).
 
@@ -14,12 +14,12 @@ Add both `api` and `export` to your Kotlin Multiplatform module's `build.gradle.
 ```kotlin
 kotlin {
     sourceSets.commonMain.dependencies {
-        api("io.github.kunal26das:startup:4.0.0")
+        api("io.github.kunal26das:startup:4.0.1")
     }
     listOf(iosArm64(), iosSimulatorArm64(), iosX64()).forEach { target ->
         target.binaries.framework {
             baseName = "Shared"
-            export("io.github.kunal26das:startup:4.0.0")
+            export("io.github.kunal26das:startup:4.0.1")
         }
     }
 }
@@ -215,7 +215,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 kotlin {
     targets.withType<KotlinNativeTarget>().configureEach {
         binaries.withType<Framework>().configureEach {
-            export("io.github.kunal26das:startup:4.0.0")
+            export("io.github.kunal26das:startup:4.0.1")
         }
     }
 }

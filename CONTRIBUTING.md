@@ -17,7 +17,7 @@ The repository currently uses:
 | JDK | 21 | Make Java available to the wrapper; the build also requests a Java 21 toolchain. |
 | Gradle | 9.7.1 | Use the checked-in wrapper. |
 | Kotlin | 2.4.20 | Resolved by Gradle. |
-| Android Gradle Plugin | 9.4.0 | Resolved by Gradle. |
+| Android Gradle Plugin | 9.4.1 | Resolved by Gradle. |
 | Android SDK platform | 37 | Install it and Platform-Tools through the Android SDK Manager. |
 
 Versions come from [the version catalog](gradle/libs.versions.toml),
