@@ -45,7 +45,7 @@ kotlin {
         binaries.executable(nativeBuildTypes) { entryPoint = nativeEntryPoint }
         binaries.framework("exported", nativeBuildTypes) {
             baseName = objCFramework
-            export(project(":startup"))
+            export(project.dependencies.project(":startup"))
         }
         binaries.framework("bare", nativeBuildTypes) { baseName = objCFramework }
     }

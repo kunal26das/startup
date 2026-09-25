@@ -62,11 +62,11 @@ startup/                  the published library
                           awaitBlocking
   src/nonAndroidMain      the runtime for the other ten targets
   src/desktopMain         the JVM StartupLock, StartupWaveThread, StartupOnce, awaitBlocking
-  src/nativeMain          the Kotlin/Native StartupLock, its thread token, StartupWaveThread,
-                          StartupOnce, startupYield's expect, awaitBlocking
-  src/appleMain           the sched_yield actual, and nothing else
-  src/linuxMain           the sched_yield actual, and nothing else
-  src/mingwMain           the SwitchToThread actual, and nothing else
+  src/nativeMain          the Kotlin/Native StartupLock, StartupMutex's expect,
+                          StartupWaveThread, StartupOnce, awaitBlocking
+  src/appleMain           the pthread StartupMutex actual, and nothing else
+  src/linuxMain           the pthread StartupMutex actual, and nothing else
+  src/mingwMain           the pthread StartupMutex actual, and nothing else
   src/jsMain              the single-threaded StartupLock, StartupWaveThread and StartupOnce,
                           and the awaitBlocking that refuses
   src/wasmJsMain          the single-threaded StartupLock, StartupWaveThread and StartupOnce,
@@ -76,6 +76,8 @@ startup/                  the published library
   src/desktopTest         the concurrency, wave-contract, barrier and coroutine tests, which
                           need real threads; the wave-sibling refusal is in nonAndroidTest,
                           because a same-thread runner needs none
+  src/nativeTest          the same contention and barrier questions asked of the native lock
+  src/linuxTest           the CPU-time check that a thread waiting for the native lock parks
   src/androidHostTest     the Android bytecode contract, asserted reflectively
 sample/                   not published; proves a consumer writes an initializer once
   src/commonMain          shared initializers, the two expect initializers, SampleReport
@@ -180,10 +182,14 @@ commonMain
 ```
 
 `:startup` has an `appleMain`, `linuxMain` and `mingwMain` again as of 3.0.0. Each holds exactly one
-declaration, the `startupYield` actual — `sched_yield` on Apple and Linux, `SwitchToThread` on
-mingw — because the Kotlin/Native lock is a compare-and-set loop and there is no parking primitive
-every native target shares. They had been deleted in 2.0.0, when removing `initializerKey(objCClass)`
-emptied `appleMain`.
+declaration, the `StartupMutex` actual: a recursive pthread mutex, which every native family has,
+spelled per family because its cinterop types are not the same shape on all of them. The mutex is
+a struct on Apple and Linux and an integer handle on mingw, so mingw allocates a
+`pthread_mutex_tVar`, and `PTHREAD_MUTEX_RECURSIVE` is an `Int` on Apple and mingw and needs
+`toInt()` on Linux. Until the parking lock replaced it, the one declaration in each was a
+`startupYield` actual — `sched_yield` or `SwitchToThread` — for a compare-and-set loop that burned
+most of a core per waiting thread. They had been deleted in 2.0.0, when removing
+`initializerKey(objCClass)` emptied `appleMain`.
 
 `sample` adds one more edge on top of that, `consoleMain`, which `desktopMain`, `jsMain`,
 `wasmJsMain`, `macosMain`, `linuxMain` and `mingwMain` depend on and `iosMain` does not. A source
@@ -414,8 +420,10 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   `initializerKey(objCClass:)` was reachable from Swift while it existed, in an `appleMain`
   `InitializerKey.kt` over `kotlinx.cinterop.getOriginalKotlinClass`; it is gone in 2.0.0 and is not
   coming back, but the naming rule binds every overload that stays.
-- `export(project(":startup"))` on a consumer's framework is not optional, and neither README.md nor
-  this file may imply otherwise, though it may already be there transitively: a framework with
+- `export(project.dependencies.project(":startup"))` on a consumer's framework is not optional, and
+  neither README.md nor this file may imply otherwise. It is spelled through `DependencyHandler`
+  because `export(project(":startup"))` hands Gradle a `Project` as dependency notation, which Gradle
+  9.7.1 deprecates and Gradle 10 rejects. The export may already be there transitively: a framework with
   `transitiveExport = true` that exports a module declaring `api(...)` on this library exports this
   library too, which is what Wish's convention plugin produced and why it needed no new line. Kotlin/Native mangles a non-exported dependency module's name into
   every class it emits and drops the declarations that appear in no exported signature, so a
@@ -440,8 +448,8 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   `initializeComponent` from another thread** — there is no thread that could serve it. 3.0.0 makes
   that a `StartupException` raised at once rather than a wait: `internal expect object
   StartupWaveThread` is a thread-local flag `StartupTask.invoke` raises around the body, and
-  `StartupLock.withLock` fails on the contention path when it is set instead of parking on the JVM
-  or spinning a core on Native. The flag rather than a lock-wide barrier is the point: a thread that
+  `StartupLock.withLock` fails on the contention path when it is set instead of parking, on the JVM
+  and on Native alike. The flag rather than a lock-wide barrier is the point: a thread that
   is *not* running a task is waiting for something that really does arrive when the install ends,
   and refusing it too would turn a correct call into a crash. A task **on the installing thread**
   may still resolve anything an **earlier** wave created, because the lock is reentrant; the 2.x flat
@@ -486,11 +494,19 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   ones. `CoroutineInitializer<T : Any>` bounds `T` because `androidx.startup.Initializer` declares
   `create` `@NonNull`, and without the bound `compileAndroidMain` rejects the override.
 - `internal expect class StartupLock` in `nonAndroidMain`, with four actuals: `ReentrantLock` on the
-  JVM, a reentrant spin lock over `kotlin.concurrent.AtomicReference` plus a `@ThreadLocal` token on
-  Native, and a direct call on JS and Wasm, which are single-threaded. AndroidX serializes every
-  initialization inside `synchronized (sLock)`, so shared code cannot be unsynchronized off Android:
-  eight threads asking for two components created them five to eight times without it, and
-  intermittently reported a cycle on a graph with no edges.
+  JVM, a recursive pthread mutex on Native, and a direct call on JS and Wasm, which are
+  single-threaded. AndroidX serializes every initialization inside `synchronized (sLock)`, so shared
+  code cannot be unsynchronized off Android: eight threads asking for two components created them
+  five to eight times without it, and intermittently reported a cycle on a graph with no edges. The
+  JVM and Native actuals are one shape: `tryLock`, then the wave-task refusal, then a blocking
+  `lock` that parks the thread. Through 4.0.1 the Native one was a compare-and-set loop over
+  `sched_yield` with a `@ThreadLocal` owner token, and a thread waiting on it burned most of a core
+  for as long as the install ran — 90 to 98% of one on `linuxX64`, 98% on `macosArm64` — with no
+  priority donated to the holder. `StartupMutex` is the parking primitive that loop said it was
+  missing: each native family's `platform.posix` has a recursive pthread mutex, and a `Cleaner`
+  destroys and frees it once the lock that owns it is collected. `StartupLockTest` in `nativeTest`
+  puts it under contention on every native target, and `StartupLockParkingTest` in `linuxTest`
+  fails if a waiting thread spends a quarter of its wait on the CPU.
 - No `atomicfu`, and exactly one third-party dependency off Android: `kotlinx-coroutines-core`,
   which 3.0.0 adds to `desktopMain` and `nativeMain` for `awaitBlocking` and to `androidMain`
   beside `androidx.startup`. It reaches no public signature — `suspend` is a language feature, so a
@@ -499,7 +515,10 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   JS and Wasm artifacts have no dependency at all, because their `awaitBlocking` only throws.
   Verified by publishing to `mavenLocal` and building a consumer that declares nothing but this
   library. Nothing else earns a place: a second one has to close a hole in the mirror the way this
-  one does, not merely be convenient.
+  one does, not merely be convenient. The native lock is the proof: it parks on
+  `platform.posix` directly rather than on atomicfu's `ReentrantLock`, although coroutines already
+  put atomicfu in the native graph, because a direct dependency is still one this artifact would
+  have to declare and keep.
 - `jvmToolchain(21)` pins the compiler, and `jvmTarget` is `JVM_11` on both the `android` and the
   `desktop` target. Every registration function is `inline`, and Kotlin refuses to inline bytecode
   built for a newer JVM target than the caller's, so publishing Java 21 bytecode made the library
@@ -554,7 +573,11 @@ the ordering rules cannot hide on one platform. Eight properties matter and each
    imperatively rather than declared. Without the second guard that case recursed until the stack
    died, and killed the process outright on Kotlin/Native.
 5. Everything a component declares is read inside a guard, `dependencies()` as well as `create()`, so
-   a caller only ever has to catch `StartupException`. AndroidX wraps both in the same `try`.
+   a caller only ever has to catch `StartupException`. AndroidX wraps both in the same `try`. A
+   `StartupException` that leaves `create` already naming components — a cycle, a nested failure —
+   passes through; one that names none, such as a `CoroutineInitializer`'s refusal on JS and Wasm,
+   is wrapped with the component attached, which is what `named` did for a runner all along.
+   `namesTheComponentBehindAStartupExceptionThatNamesNone` pins the sequential half.
 6. The path that second guard reports is stitched from frames, not from `creating`. `creating` is
    the nesting stack, and two entries next to each other in it need share no edge: the outer
    component asked for something else that merely happened to need the inner one first. Rendering
@@ -589,6 +612,14 @@ the ordering rules cannot hide on one platform. Eight properties matter and each
    nested lookup still shares the initializer cache and runs normally. The planner records BFS
    parents and defers path reconstruction until a failure, keeping ordinary deep planning linear.
    Factory-thrown `StartupException` keeps its diagnostic instead of being wrapped again.
+
+An install plans the eager components of the manifest it was given — `manifest.eagerComponents`,
+never `installed.eagerComponents` — which is the loop `Startup.install` runs on Android. Planning the
+merged registry re-planned a component whose `create` was still running whenever that `create`
+installed a manifest of its own, the way a feature module registers its graph, and reported
+`Cycle detected: X -> X` for a graph with no edges. `installsAManifestFromInsideCreate` pins the fix
+and `leavesAnEarlierInstallsEagerComponentsToThatInstall` pins what it costs: a later install no
+longer re-runs an eager component an earlier one failed to create, on either runtime.
 
 ## Where the two runtimes differ
 

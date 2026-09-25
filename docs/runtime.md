@@ -56,6 +56,10 @@ what `InitializationProvider` discovered in XML; programmatic installation alone
 component eager in that query.
 
 Installing another manifest merges registrations but does not replace already-created products.
+Each install starts the eager components of the manifest it is given, with their dependencies,
+as `Startup.install` does on Android. An initializer can therefore install a feature's own
+manifest from inside `create`. A later install does not retry eager components from an earlier
+manifest that failed; include them in the manifest you install to start them again.
 The accessor exposes no public reset, initialization-order history, or “is already created” query.
 Record application diagnostics inside `create` and retain your own manifest value when needed.
 

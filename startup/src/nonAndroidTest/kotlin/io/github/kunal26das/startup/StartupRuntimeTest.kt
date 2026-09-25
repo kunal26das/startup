@@ -94,6 +94,28 @@ class StartupRuntimeTest {
         assertEquals(listOf("failing"), TestLog.created)
     }
 
+    /**
+     * A [StartupException] that names no component, which is what a [CoroutineInitializer]
+     * raises on Kotlin/JS and Kotlin/Wasm, is reported against the component whose `create`
+     * threw it, with the original kept as the cause. A runner already reported it that way;
+     * without one it used to arrive with no component and a message that named nothing.
+     */
+    @Test
+    fun namesTheComponentBehindAStartupExceptionThatNamesNone() {
+        val manifest = StartupManifest {
+            metaData<BareFailureInitializer> { BareFailureInitializer() }
+        }
+        val exception = assertFailsWith<StartupException> {
+            Startup.install(DefaultContext, manifest)
+        }
+        val expected: List<AnyInitializerKey> = listOf(initializerKey<BareFailureInitializer>())
+        assertEquals(expected, exception.components)
+        val name = componentName(initializerKey<BareFailureInitializer>())
+        assertEquals("Cannot initialize $name.", exception.message)
+        assertEquals(BareFailureInitializer.MESSAGE, exception.cause?.message)
+        assertEquals(listOf("bareFailure"), TestLog.created)
+    }
+
     /** A component may resolve another one from inside create, exactly as on Android. */
     @Test
     fun allowsReentrantResolutionFromInsideCreate() {
@@ -190,6 +212,47 @@ class StartupRuntimeTest {
         assertEquals(listOf("alpha", "beta"), TestLog.created)
         assertEquals(true, appInitializer.isEagerlyInitialized(initializerKey<AlphaInitializer>()))
         assertEquals(true, appInitializer.isEagerlyInitialized(initializerKey<BetaInitializer>()))
+    }
+
+    /**
+     * An initializer may install a manifest of its own from inside `create`, as a feature
+     * module registering its graph does. The nested install creates that manifest's eager
+     * components and leaves the component whose `create` is still running to finish, which is
+     * what `Startup.install` does on Android. Planning every installed eager entry instead
+     * re-planned the running component and reported `Cycle detected: NestedInstall ->
+     * NestedInstall` for a graph with no edges.
+     */
+    @Test
+    fun installsAManifestFromInsideCreate() {
+        val manifest = StartupManifest {
+            metaData<NestedInstallInitializer> { NestedInstallInitializer() }
+        }
+        val appInitializer = Startup.install(DefaultContext, manifest)
+        assertEquals(listOf("alpha", "nestedInstall"), TestLog.created)
+        assertEquals("alpha", appInitializer.initializeComponent(initializerKey<AlphaInitializer>()))
+        assertEquals(true, appInitializer.isEagerlyInitialized(initializerKey<AlphaInitializer>()))
+        assertEquals(listOf("alpha", "nestedInstall"), TestLog.created)
+    }
+
+    /**
+     * An install creates the eager components of the manifest it is given and nothing an
+     * earlier install declared. A component an earlier install failed to create stays
+     * registered and resolvable on demand, but an unrelated later install does not run it
+     * again, which is also what `Startup.install` does on Android.
+     */
+    @Test
+    fun leavesAnEarlierInstallsEagerComponentsToThatInstall() {
+        assertFailsWith<StartupException> {
+            Startup.install(
+                DefaultContext,
+                StartupManifest { metaData<FailingInitializer> { FailingInitializer() } },
+            )
+        }
+        Startup.install(
+            DefaultContext,
+            StartupManifest { metaData<AlphaInitializer> { AlphaInitializer() } },
+        )
+        assertEquals(listOf("failing", "alpha"), TestLog.created)
     }
 
     /**
