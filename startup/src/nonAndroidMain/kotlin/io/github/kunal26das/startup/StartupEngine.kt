@@ -151,7 +151,7 @@ internal class StartupEngine(private val context: Context) {
             try {
                 initialized[component] = initializer.create(context)
             } catch (exception: StartupException) {
-                throw exception
+                throw attributed(exception, component)
             } catch (throwable: Throwable) {
                 throw StartupException(
                     "Cannot initialize ${componentName(component)}.",
@@ -288,6 +288,29 @@ internal class StartupEngine(private val context: Context) {
         if (failed.isEmpty()) return exception
         return StartupException(waveFailureMessage(tasks, pending), exception, failed)
     }
+
+    /**
+     * [exception] reported against [component], when it names no component of its own.
+     *
+     * A [StartupException] that names what it concerns — a cycle, a missing registration, a
+     * nested component that failed — passes through unchanged. One that names nothing, which
+     * is what a [CoroutineInitializer] raises on Kotlin/JS and Kotlin/Wasm, is wrapped with
+     * [component] attached and the original as its cause, the way [named] already reports the
+     * same failure under a runner.
+     */
+    private fun attributed(
+        exception: StartupException,
+        component: AnyInitializerKey,
+    ): StartupException =
+        if (exception.components.isNotEmpty()) {
+            exception
+        } else {
+            StartupException(
+                "Cannot initialize ${componentName(component)}.",
+                exception,
+                listOf(component),
+            )
+        }
 
     private fun waveFailureMessage(
         tasks: List<StartupTask>,

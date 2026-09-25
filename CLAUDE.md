@@ -554,7 +554,11 @@ the ordering rules cannot hide on one platform. Eight properties matter and each
    imperatively rather than declared. Without the second guard that case recursed until the stack
    died, and killed the process outright on Kotlin/Native.
 5. Everything a component declares is read inside a guard, `dependencies()` as well as `create()`, so
-   a caller only ever has to catch `StartupException`. AndroidX wraps both in the same `try`.
+   a caller only ever has to catch `StartupException`. AndroidX wraps both in the same `try`. A
+   `StartupException` that leaves `create` already naming components — a cycle, a nested failure —
+   passes through; one that names none, such as a `CoroutineInitializer`'s refusal on JS and Wasm,
+   is wrapped with the component attached, which is what `named` did for a runner all along.
+   `namesTheComponentBehindAStartupExceptionThatNamesNone` pins the sequential half.
 6. The path that second guard reports is stitched from frames, not from `creating`. `creating` is
    the nesting stack, and two entries next to each other in it need share no edge: the outer
    component asked for something else that merely happened to need the inner one first. Rendering

@@ -94,6 +94,28 @@ class StartupRuntimeTest {
         assertEquals(listOf("failing"), TestLog.created)
     }
 
+    /**
+     * A [StartupException] that names no component, which is what a [CoroutineInitializer]
+     * raises on Kotlin/JS and Kotlin/Wasm, is reported against the component whose `create`
+     * threw it, with the original kept as the cause. A runner already reported it that way;
+     * without one it used to arrive with no component and a message that named nothing.
+     */
+    @Test
+    fun namesTheComponentBehindAStartupExceptionThatNamesNone() {
+        val manifest = StartupManifest {
+            metaData<BareFailureInitializer> { BareFailureInitializer() }
+        }
+        val exception = assertFailsWith<StartupException> {
+            Startup.install(DefaultContext, manifest)
+        }
+        val expected: List<AnyInitializerKey> = listOf(initializerKey<BareFailureInitializer>())
+        assertEquals(expected, exception.components)
+        val name = componentName(initializerKey<BareFailureInitializer>())
+        assertEquals("Cannot initialize $name.", exception.message)
+        assertEquals(BareFailureInitializer.MESSAGE, exception.cause?.message)
+        assertEquals(listOf("bareFailure"), TestLog.created)
+    }
+
     /** A component may resolve another one from inside create, exactly as on Android. */
     @Test
     fun allowsReentrantResolutionFromInsideCreate() {
