@@ -51,9 +51,17 @@ internal class StartupEngine(private val context: Context) {
     private var installed: StartupManifest = StartupManifest.Empty
     private var depth = 0
 
+    /**
+     * Composes [manifest] in and creates the eager components [manifest] itself declares.
+     *
+     * The roots are the manifest's own, not every eager entry [installed] has collected, which
+     * is the loop `Startup.install` runs on Android. Planning the whole registry re-planned a
+     * component whose `create` was still running whenever that `create` installed a manifest
+     * of its own, and reported a cycle through it for a graph that has none.
+     */
     fun install(manifest: StartupManifest, runner: WaveRunner? = null): Unit = lock.withLock {
         installed += manifest
-        val roots = installed.eagerComponents
+        val roots = manifest.eagerComponents
         withInstances { execute(planFor(roots), roots, runner) }
     }
 

@@ -193,6 +193,47 @@ class StartupRuntimeTest {
     }
 
     /**
+     * An initializer may install a manifest of its own from inside `create`, as a feature
+     * module registering its graph does. The nested install creates that manifest's eager
+     * components and leaves the component whose `create` is still running to finish, which is
+     * what `Startup.install` does on Android. Planning every installed eager entry instead
+     * re-planned the running component and reported `Cycle detected: NestedInstall ->
+     * NestedInstall` for a graph with no edges.
+     */
+    @Test
+    fun installsAManifestFromInsideCreate() {
+        val manifest = StartupManifest {
+            metaData<NestedInstallInitializer> { NestedInstallInitializer() }
+        }
+        val appInitializer = Startup.install(DefaultContext, manifest)
+        assertEquals(listOf("alpha", "nestedInstall"), TestLog.created)
+        assertEquals("alpha", appInitializer.initializeComponent(initializerKey<AlphaInitializer>()))
+        assertEquals(true, appInitializer.isEagerlyInitialized(initializerKey<AlphaInitializer>()))
+        assertEquals(listOf("alpha", "nestedInstall"), TestLog.created)
+    }
+
+    /**
+     * An install creates the eager components of the manifest it is given and nothing an
+     * earlier install declared. A component an earlier install failed to create stays
+     * registered and resolvable on demand, but an unrelated later install does not run it
+     * again, which is also what `Startup.install` does on Android.
+     */
+    @Test
+    fun leavesAnEarlierInstallsEagerComponentsToThatInstall() {
+        assertFailsWith<StartupException> {
+            Startup.install(
+                DefaultContext,
+                StartupManifest { metaData<FailingInitializer> { FailingInitializer() } },
+            )
+        }
+        Startup.install(
+            DefaultContext,
+            StartupManifest { metaData<AlphaInitializer> { AlphaInitializer() } },
+        )
+        assertEquals(listOf("failing", "alpha"), TestLog.created)
+    }
+
+    /**
      * A component registered under a key computed at run time joins the graph like any
      * other: it is ordered behind its dependency, created once, and reachable afterwards
      * by the key a reified call site would produce. This is the shape a host application

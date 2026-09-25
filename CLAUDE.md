@@ -590,6 +590,14 @@ the ordering rules cannot hide on one platform. Eight properties matter and each
    parents and defers path reconstruction until a failure, keeping ordinary deep planning linear.
    Factory-thrown `StartupException` keeps its diagnostic instead of being wrapped again.
 
+An install plans the eager components of the manifest it was given — `manifest.eagerComponents`,
+never `installed.eagerComponents` — which is the loop `Startup.install` runs on Android. Planning the
+merged registry re-planned a component whose `create` was still running whenever that `create`
+installed a manifest of its own, the way a feature module registers its graph, and reported
+`Cycle detected: X -> X` for a graph with no edges. `installsAManifestFromInsideCreate` pins the fix
+and `leavesAnEarlierInstallsEagerComponentsToThatInstall` pins what it costs: a later install no
+longer re-runs an eager component an earlier one failed to create, on either runtime.
+
 ## Where the two runtimes differ
 
 Deliberate, documented in README.md and docs/runtime.md, and not to be "fixed" silently:
