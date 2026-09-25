@@ -420,8 +420,10 @@ looks equivalent and does not compile; those are listed so they are not re-deriv
   `initializerKey(objCClass:)` was reachable from Swift while it existed, in an `appleMain`
   `InitializerKey.kt` over `kotlinx.cinterop.getOriginalKotlinClass`; it is gone in 2.0.0 and is not
   coming back, but the naming rule binds every overload that stays.
-- `export(project(":startup"))` on a consumer's framework is not optional, and neither README.md nor
-  this file may imply otherwise, though it may already be there transitively: a framework with
+- `export(project.dependencies.project(":startup"))` on a consumer's framework is not optional, and
+  neither README.md nor this file may imply otherwise. It is spelled through `DependencyHandler`
+  because `export(project(":startup"))` hands Gradle a `Project` as dependency notation, which Gradle
+  9.7.1 deprecates and Gradle 10 rejects. The export may already be there transitively: a framework with
   `transitiveExport = true` that exports a module declaring `api(...)` on this library exports this
   library too, which is what Wish's convention plugin produced and why it needed no new line. Kotlin/Native mangles a non-exported dependency module's name into
   every class it emits and drops the declarations that appear in no exported signature, so a
