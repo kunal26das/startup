@@ -100,10 +100,12 @@ commands you ran and note platforms you could not execute. Reports are under eac
 | `startup/src/androidMain` | AndroidX aliases and Android-specific bridges. |
 | `startup/src/nonAndroidMain` | The runtime shared by the other targets. |
 | `startup/src/{desktop,native,js,wasmJs}Main` | Locks, thread state, and blocking support. |
-| `startup/src/{apple,linux,mingw}Main` | Native platform helpers. |
+| `startup/src/{apple,linux,mingw}Main` | The pthread mutex behind the native lock. |
 | `startup/src/commonTest` | Shared planner, manifest, and task tests. |
 | `startup/src/nonAndroidTest` | Runtime tests shared by non-Android targets. |
 | `startup/src/desktopTest` | Threading, coroutine, and concurrency regression tests. |
+| `startup/src/nativeTest` | Contention and wave-task refusal tests for the native lock. |
+| `startup/src/linuxTest` | The CPU-time check that a thread waiting for the native lock parks. |
 | `startup/src/androidHostTest` | Android bytecode and interface contracts. |
 | `sample/` | Consumer examples, platform entrypoints, and sample tests. |
 | `androidApp/` | The launchable Android app that consumes `sample`. |
@@ -113,7 +115,8 @@ commands you ran and note platforms you could not execute. Reports are under eac
 - Add a regression test for a behavior fix, exercising the failure and the intended result. Prefer
   tests of observable behavior over tests that mirror implementation details.
 - Put portable tests in the shared test source set that can run them; keep thread-dependent tests
-  in `desktopTest`. When testing the sample's process-wide singleton, assert relative order or
+  in `desktopTest`, or in `nativeTest` when they exercise the Kotlin/Native lock. When testing the
+  sample's process-wide singleton, assert relative order or
   containment rather than a fresh global log.
 - Document every public declaration with KDoc. Follow the existing convention of one top-level
   Kotlin declaration per file, with the filename matching the declaration. Keep required
