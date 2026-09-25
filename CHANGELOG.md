@@ -3,6 +3,32 @@
 Migration instructions are in the [migration guide](docs/migration.md). Dependency coordinates are
 in the [installation guide](README.md#installation).
 
+## Unreleased
+
+The public Kotlin and Swift APIs are unchanged from 4.0.1. The non-Android runtime changes which
+eager components an install starts; see **Changed**.
+
+### Changed
+
+- Off Android, `Startup.install` starts the eager components of the manifest it is given, with
+  their dependencies, instead of every eager registration installed so far. This matches Android
+  and the documented contract. A later install no longer retries an eager component that an
+  earlier install failed to create; include it in the manifest you install to start it again.
+
+### Fixed
+
+- Allow an initializer to call `Startup.install` from inside `create`, for example to install a
+  feature's own manifest. Off Android this failed with `Cycle detected: X -> X` for a graph with
+  no cycle.
+- Name the component when its `create` throws a `StartupException` that names none, such as a
+  `CoroutineInitializer` on JS or Wasm. The original exception is kept as the cause. Installs with
+  a `WaveRunner` already reported these failures this way.
+- Park Kotlin/Native threads that wait for the startup lock instead of spinning. A thread waiting
+  for an install used most of a CPU core until the install finished; it now blocks on a recursive
+  pthread mutex. The native artifacts add no dependency.
+- Replace the sample framework's `export(project(":startup"))`, a dependency notation Gradle 10
+  rejects, and add `.gitattributes` so `gradlew` and `gradlew.bat` keep their line endings.
+
 ## 4.0.1 — 2026-09-25
 
 The public Kotlin and Swift APIs, startup behavior, and consumer requirements are unchanged from
