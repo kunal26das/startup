@@ -5,11 +5,30 @@ Apply each version's changes after the version you currently use. Use the
 
 | Current version | Sections to apply |
 | --- | --- |
-| 1.x | 2.0.0 removals, 2.1.0 factory validation, 3.0.0 API changes, 3.0.1 task handling, then 4.0.0 dependency update |
-| 2.0.0 | 2.1.0 factory validation, 3.0.0 API changes, 3.0.1 task handling, then 4.0.0 dependency update |
-| 2.1.0 | 3.0.0 API changes, 3.0.1 task handling, then 4.0.0 dependency update |
-| 3.0.0 | 3.0.1 task failure and runner checks, then 4.0.0 dependency update |
-| 3.0.1 | 4.0.0 dependency update |
+| 1.x | 2.0.0 removals, 2.1.0 factory validation, 3.0.0 API changes, 3.0.1 task handling, 4.0.0 dependency update, then 4.0.2 install retries |
+| 2.0.0 | 2.1.0 factory validation, 3.0.0 API changes, 3.0.1 task handling, 4.0.0 dependency update, then 4.0.2 install retries |
+| 2.1.0 | 3.0.0 API changes, 3.0.1 task handling, 4.0.0 dependency update, then 4.0.2 install retries |
+| 3.0.0 | 3.0.1 task failure and runner checks, 4.0.0 dependency update, then 4.0.2 install retries |
+| 3.0.1 | 4.0.0 dependency update, then 4.0.2 install retries |
+| 4.0.0–4.0.1 | 4.0.2 install retries |
+
+## From 4.0.0 or 4.0.1 to 4.0.2
+
+Update the dependency to `io.github.kunal26das:startup:4.0.2`. If you export Startup to Swift,
+update both `api(...)` and `export(...)`. Public Kotlin and Swift APIs and platform requirements
+are unchanged.
+
+Off Android, each `Startup.install` now starts only the eager components in the manifest passed
+to that call, plus their dependencies. This allows an initializer to install another manifest
+from inside `create`, and matches the existing Android behavior.
+
+If an earlier install failed, installing an unrelated manifest no longer retries that earlier
+manifest's eager components. To retry, install the original or a corrected manifest containing
+those eager registrations, or request the component through `initializeComponent`.
+
+A `StartupException` thrown by `create` with no named components is now wrapped with the failing
+component attached. Its original exception remains available as `cause`; exceptions that already
+name components pass through unchanged.
 
 ## From 3.0.1 to 4.0.0
 

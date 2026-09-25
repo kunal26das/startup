@@ -3,7 +3,7 @@
 Migration instructions are in the [migration guide](docs/migration.md). Dependency coordinates are
 in the [installation guide](README.md#installation).
 
-## Unreleased
+## 4.0.2 — 2026-09-25
 
 The public Kotlin and Swift APIs are unchanged from 4.0.1. The non-Android runtime changes which
 eager components an install starts; see **Changed**.
