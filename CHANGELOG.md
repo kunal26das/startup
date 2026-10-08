@@ -16,6 +16,12 @@ The public Kotlin and Swift APIs, startup behavior, and consumer requirements ar
 - Normalize the tracked Windows launcher's line endings to match `.gitattributes`, keeping fresh
   checkouts clean while preserving CRLF on disk.
 
+### Fixed
+
+- Let the Gradle daemon use any installed Java 21 distribution. Requiring a JetBrains runtime
+  through stale download URLs prevented CI from using its installed Temurin JDK and failed before
+  the build started.
+
 ## 4.0.2 — 2026-09-25
 
 The public Kotlin and Swift APIs are unchanged from 4.0.1. The non-Android runtime changes which

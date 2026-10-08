@@ -14,7 +14,7 @@ The repository currently uses:
 
 | Tool | Version | Setup |
 | --- | --- | --- |
-| JDK | 21 | Make Java available to the wrapper; the build also requests a Java 21 toolchain. |
+| JDK | 21 | Install any JDK 21 distribution and set `JAVA_HOME` to it; CI uses Temurin. |
 | Gradle | 9.8.0 | Use the checked-in wrapper. |
 | Kotlin | 2.4.20 | Resolved by Gradle. |
 | Android Gradle Plugin | 9.4.1 | Resolved by Gradle. |
