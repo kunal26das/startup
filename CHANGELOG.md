@@ -3,6 +3,19 @@
 Migration instructions are in the [migration guide](docs/migration.md). Dependency coordinates are
 in the [installation guide](README.md#installation).
 
+## 4.0.3 — 2026-10-09
+
+The public Kotlin and Swift APIs, startup behavior, and consumer requirements are unchanged from
+4.0.2. No application API migration is required.
+
+### Changed
+
+- Update the Gradle wrapper from 9.7.1 to 9.8.0, including the upstream wrapper JAR and Windows
+  launcher updates.
+- Update installation examples and the contributor setup guide for this release.
+- Normalize the tracked Windows launcher's line endings to match `.gitattributes`, keeping fresh
+  checkouts clean while preserving CRLF on disk.
+
 ## 4.0.2 — 2026-09-25
 
 The public Kotlin and Swift APIs are unchanged from 4.0.1. The non-Android runtime changes which
