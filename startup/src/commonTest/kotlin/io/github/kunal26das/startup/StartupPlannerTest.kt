@@ -102,11 +102,9 @@ class StartupPlannerTest {
     /**
      * `waves.flatten()` is exactly `order`, on a full plan and on an incremental one.
      *
-     * This is the whole contract [StartupPlan.waves] carries. It is diagnostic data about
-     * the levels of the graph, never a scheduling hook: the engine is serialized behind
-     * one reentrant lock, so a consumer reading the waves is inspecting a plan it cannot
-     * make this library execute any differently, and the only guarantee worth pinning is
-     * that the grouping and the order describe the same walk.
+     * The waves are the schedule handed to a [WaveRunner]. Their grouping must retain
+     * the same deterministic dependency order as the flattened plan, including when
+     * already-created components are excluded from an incremental plan.
      */
     @Test
     fun groupsExactlyTheComponentsItOrders() {

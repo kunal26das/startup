@@ -2,3 +2,8 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+/.agents/** text eol=lf
+/.claude/** text eol=lf
+/openspec/** text eol=lf
+/tools/ai/** text eol=lf
+/scripts/*.mjs text eol=lf

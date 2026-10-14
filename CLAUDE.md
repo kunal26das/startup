@@ -16,6 +16,8 @@ platform behavior. Keep historical rationale and advanced details in the focused
 - [docs/migration.md](docs/migration.md) and [CHANGELOG.md](CHANGELOG.md): upgrades and version history.
 - [CONTRIBUTING.md](CONTRIBUTING.md): setup, source layout, and focused verification.
 - [sample/README.md](sample/README.md): runnable examples and host requirements.
+- [AGENTS.md](AGENTS.md) and [docs/agent-workflows.md](docs/agent-workflows.md): scoped project
+  skills, OpenSpec changes, reproducible setup, and evaluation.
 
 This file records maintainer conventions and implementation rationale. Keep README examples
 copyable, document their source set and required imports, and distinguish published behavior from
@@ -50,6 +52,11 @@ where `checkAndroidFloors` verifies them.
   `CoroutineInitializer`: the interface's file already generates a JVM facade for
   `COROUTINE_INITIALIZER_UNSUPPORTED`, and a same-named actual file would collide with it.
 - No AI attribution in commits, pull requests or files.
+
+First-party conventions apply to code maintained here. Preserve vendored upstream files and
+licenses unchanged; keep project adaptations in the first-party skill that uses them. For
+development workflow changes, follow AGENTS.md and the agent workflow guide without adding a
+new approval gate to already-authorized work. Tooling-only changes do not require a library release.
 
 ## Layout
 

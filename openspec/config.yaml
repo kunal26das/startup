@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  Startup is a Kotlin Multiplatform port of AndroidX App Startup.
+  Read README.md for consumer contracts, CONTRIBUTING.md for verification commands,
+  and CLAUDE.md for maintained source conventions and implementation rationale.
+  Android exposes AndroidX typealiases. Ten other targets share a custom runtime.
+  Keep public Kotlin and Swift APIs aligned, including Objective-C framework exports.
+  Build versions come from gradle/libs.versions.toml and the Gradle wrapper.
+  Consumer floors are Android minSdk 21, minCompileSdk 34, and JVM bytecode 11.
+  Runtime tests require the matching host; linking and host tests are not device execution.
+  Use node scripts/openspec.mjs for the pinned CLI and node scripts/setup-ai.mjs to
+  regenerate integrations. The project does not require changes to global agent settings.
+  Existing user authorization carries forward. A written proposal does not add
+  approval gates or authorize unrelated merges, publishing, or external messages.
+
+rules:
+  proposal:
+    - Identify the user-visible behavior, affected capabilities, and compatibility implications.
+    - Reuse accepted scope; request clarification only for a material unresolved decision.
+  specs:
+    - State observable requirements with concrete WHEN/THEN scenarios.
+    - Keep current behavior distinct from proposed changes and link relevant regression tests.
+  design:
+    - Account for Android aliases, non-Android locking, and Swift exports when affected.
+    - Preserve existing runtime and dependency constraints unless the task changes them.
+  tasks:
+    - Include focused verification for the affected behavior and report skipped or unavailable targets.
+    - Update relevant developer documentation and specs alongside implementation.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Startup Skill Authoring"
+  short_description: "Create and evaluate reusable Startup agent skills"
+  default_prompt: "Use $startup-skill-authoring to improve a Startup project skill and evaluate it against a baseline."

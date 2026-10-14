@@ -1,0 +1,334 @@
+{
+  "fixture": "recorded-input simulation; no remote lookup needed",
+  "source_commit": "1111111111111111111111111111111111111111",
+  "change": {
+    "summary": "Move a public key helper between common and platform declarations without changing its signature",
+    "source_sets": [
+      "commonMain",
+      "desktopMain",
+      "androidMain"
+    ]
+  },
+  "local_run": {
+    "source_commit": "1111111111111111111111111111111111111111",
+    "host": {
+      "os": "macOS",
+      "architecture": "arm64"
+    },
+    "invocation": [
+      "desktopTest",
+      "testAndroidHostTest",
+      "jsNodeTest",
+      "wasmJsNodeTest",
+      "macosArm64Test",
+      "iosSimulatorArm64Test",
+      "jsBrowserTest",
+      "wasmJsBrowserTest",
+      "macosX64Test",
+      "iosX64Test",
+      "linuxX64Test",
+      "mingwX64Test",
+      "linkDebugTestLinuxX64",
+      "linkDebugTestMingwX64",
+      "linkDebugTestMacosX64",
+      "linkDebugTestIosX64",
+      "compileKotlinDesktop"
+    ],
+    "terminal_summary": "BUILD SUCCESSFUL",
+    "tasks": [
+      {
+        "task": ":startup:desktopTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 18,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":startup:testAndroidHostTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 18,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":startup:jsNodeTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 18,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":startup:wasmJsNodeTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 18,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":startup:macosArm64Test",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 18,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":startup:iosSimulatorArm64Test",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 18,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":startup:jsBrowserTest",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":startup:wasmJsBrowserTest",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":startup:macosX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":startup:iosX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":startup:linuxX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":startup:mingwX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":startup:linkDebugTestLinuxX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":startup:linkDebugTestMingwX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":startup:linkDebugTestMacosX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":startup:linkDebugTestIosX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":startup:compileKotlinDesktop",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":sample:desktopTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 5,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":sample:testAndroidHostTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 5,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":sample:jsNodeTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 5,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":sample:wasmJsNodeTest",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 5,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":sample:macosArm64Test",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 5,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":sample:iosSimulatorArm64Test",
+        "outcome": "SUCCESS",
+        "executed": true,
+        "test_report": {
+          "tests": 5,
+          "failures": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "task": ":sample:jsBrowserTest",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":sample:wasmJsBrowserTest",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":sample:macosX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":sample:iosX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":sample:linuxX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":sample:mingwX64Test",
+        "outcome": "SKIPPED",
+        "executed": false
+      },
+      {
+        "task": ":sample:linkDebugTestLinuxX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":sample:linkDebugTestMingwX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":sample:linkDebugTestMacosX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":sample:linkDebugTestIosX64",
+        "outcome": "SUCCESS",
+        "executed": true
+      },
+      {
+        "task": ":sample:compileKotlinDesktop",
+        "outcome": "SUCCESS",
+        "executed": true
+      }
+    ]
+  },
+  "ci_runs": [
+    {
+      "id": "linux-current",
+      "source_commit": "1111111111111111111111111111111111111111",
+      "host": {
+        "os": "Linux",
+        "architecture": "x86_64"
+      },
+      "tasks": [
+        {
+          "task": ":startup:linuxX64Test",
+          "outcome": "SUCCESS",
+          "executed": true,
+          "test_report": {
+            "tests": 23,
+            "failures": 0,
+            "skipped": 0
+          }
+        },
+        {
+          "task": ":sample:linuxX64Test",
+          "outcome": "SUCCESS",
+          "executed": true,
+          "test_report": {
+            "tests": 5,
+            "failures": 0,
+            "skipped": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "windows-previous",
+      "source_commit": "2222222222222222222222222222222222222222",
+      "host": {
+        "os": "Windows",
+        "architecture": "x86_64"
+      },
+      "tasks": [
+        {
+          "task": ":startup:mingwX64Test",
+          "outcome": "SUCCESS",
+          "executed": true,
+          "test_report": {
+            "tests": 20,
+            "failures": 0,
+            "skipped": 0
+          }
+        },
+        {
+          "task": ":sample:mingwX64Test",
+          "outcome": "SUCCESS",
+          "executed": true,
+          "test_report": {
+            "tests": 5,
+            "failures": 0,
+            "skipped": 0
+          }
+        }
+      ]
+    }
+  ],
+  "additional_reports": []
+}

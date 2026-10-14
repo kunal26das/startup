@@ -1,0 +1,83 @@
+name: Agent workflows
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".agents/**"
+      - ".claude/**"
+      - "openspec/**"
+      - "tools/ai/**"
+      - "scripts/*ai*.mjs"
+      - "scripts/openspec.mjs"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/agent-workflows.md"
+      - ".gitattributes"
+      - ".gitignore"
+      - ".github/workflows/agent-workflows.yml"
+  pull_request:
+    paths:
+      - ".agents/**"
+      - ".claude/**"
+      - "openspec/**"
+      - "tools/ai/**"
+      - "scripts/*ai*.mjs"
+      - "scripts/openspec.mjs"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/agent-workflows.md"
+      - ".gitattributes"
+      - ".gitignore"
+      - ".github/workflows/agent-workflows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tools/ai/package-lock.json
+      - name: Install pinned tooling
+        run: npm ci --prefix tools/ai --ignore-scripts
+      - name: Check integrations and provenance
+        run: node scripts/check-ai-workflows.mjs
+      - name: Test workflow tooling
+        run: node --test scripts/ai-workflows.test.mjs
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Test maintenance helpers without network
+        run: python -X warn_default_encoding -W error::EncodingWarning .agents/skills/startup-maintainer/scripts/test_helpers.py
+      - name: Validate specifications and changes
+        run: node scripts/openspec.mjs validate --all --strict --no-interactive
+      - name: Check archived task completion
+        run: node scripts/openspec.mjs validate --archived --no-interactive

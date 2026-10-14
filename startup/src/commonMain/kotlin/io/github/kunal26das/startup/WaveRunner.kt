@@ -12,7 +12,14 @@ package io.github.kunal26das.startup
  *
  * ```
  * Startup.install(context, manifest) { wave ->
- *     runBlocking { coroutineScope { wave.map { async(Dispatchers.IO) { it() } }.awaitAll() } }
+ *     runBlocking {
+ *         coroutineScope {
+ *             val results = wave.map { task ->
+ *                 async(Dispatchers.IO) { runCatching { task() } }
+ *             }.awaitAll()
+ *             results.firstOrNull { it.isFailure }?.getOrThrow()
+ *         }
+ *     }
  * }
  * ```
  *
@@ -34,13 +41,14 @@ package io.github.kunal26das.startup
  *
  * A task may call back into [AppInitializer.initializeComponent] only from the thread that
  * called [Startup.install], because the engine holds its lock across the whole install.
- * From the thread the task's body runs on, that call fails immediately with a
- * [StartupException] rather than blocking on a lock the installing thread still owns.
+ * From a worker thread, that call fails immediately with a [StartupException] rather
+ * than waiting for the installing thread's lock.
  *
  * **Even on the installing thread it may not ask for a component of the wave it is in.**
  * Nothing a wave creates is written back until [run] returns, so a sibling is neither
  * created nor creatable there, and it is refused by name rather than reported as a cycle.
- * Only what an earlier wave already built can be read.
+ * On the installing thread, a task may read a completed product or resolve an uncreated
+ * component outside the current wave, provided the lookup does not reenter an active operation.
  *
  * **A task must not hand that call to a further thread.** The guard knows the thread that
  * entered the task and no other, so a task that spawns a thread, or a
@@ -51,9 +59,10 @@ package io.github.kunal26das.startup
  *
  * On Android this is not used: `androidx.startup` creates each component itself, depth
  * first on the calling thread, and offers no seam to change that. A manifest installed
- * with a runner therefore runs concurrently on the other ten targets and sequentially on
- * Android. The runner must honor thread affinity and the engine lookup restriction for
- * every initializer. For a [CoroutineInitializer], it also picks the thread `create` blocks
+ * with a runner still runs sequentially on Android. On other targets the runner controls
+ * whether compatible tasks run sequentially or concurrently. The runner must honor thread
+ * affinity and the engine lookup restriction for every initializer. For a [CoroutineInitializer],
+ * it also picks the thread `create` blocks
  * and whether that thread's pool can still make progress.
  */
 fun interface WaveRunner {

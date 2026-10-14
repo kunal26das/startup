@@ -8,3 +8,7 @@ captures/
 kotlin-js-store/
 local.properties
 node_modules/
+tools/ai/.config/
+tools/ai/.cache/
+tools/ai/evaluation-runs/
+__pycache__/

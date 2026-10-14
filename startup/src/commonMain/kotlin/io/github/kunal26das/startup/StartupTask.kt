@@ -13,7 +13,10 @@ package io.github.kunal26das.startup
  * Startup.install(context, manifest) { wave ->
  *     runBlocking {
  *         coroutineScope {
- *             wave.map { task -> async(dispatcher) { trace(task.toString()) { task() } } }.awaitAll()
+ *             val results = wave.map { task ->
+ *                 async(dispatcher) { runCatching { trace(task.toString()) { task() } } }
+ *             }.awaitAll()
+ *             results.firstOrNull { it.isFailure }?.getOrThrow()
  *         }
  *     }
  * }

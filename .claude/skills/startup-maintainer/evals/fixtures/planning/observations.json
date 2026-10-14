@@ -1,0 +1,38 @@
+{
+  "fixture": "Focused historical source snapshot; source files are authoritative and are supplied for planning, not as a complete build",
+  "source_ref": "historical-before-nested-install-fix",
+  "scenario": {
+    "outer_manifest_eager": [
+      "FeatureHostInitializer"
+    ],
+    "outer_create_calls": "Startup.install(context, featureManifest)",
+    "feature_manifest_eager": [
+      "MetricsInitializer"
+    ],
+    "declared_dependencies": {
+      "FeatureHostInitializer": [],
+      "MetricsInitializer": []
+    },
+    "observed_exception": "Cycle detected: FeatureHostInitializer -> FeatureHostInitializer"
+  },
+  "existing_contracts": [
+    "Successful component products are cached by initializer key.",
+    "Registrations from installed manifests remain available for later dependency resolution.",
+    "Dependency or creation cycles raise StartupException.",
+    "Android delegates component creation to AndroidX App Startup."
+  ],
+  "request_constraints": [
+    "Preserve public Kotlin and Swift signatures.",
+    "Do not disable all cycle detection.",
+    "Explain the effect on retrying an earlier failed eager initializer."
+  ],
+  "existing_test_areas": [
+    "dependency ordering",
+    "cycle reporting",
+    "repeated lookup caching",
+    "failed initializer retry"
+  ],
+  "openspec_state": {
+    "active_changes": []
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "startup-developer-workflows",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned development tooling for Startup specifications and agent skills",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "1.14.1",
+    "yaml": "2.9.1"
+  }
+}

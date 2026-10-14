@@ -1,0 +1,57 @@
+{
+  "skill_name": "startup-maintainer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Here are the successful Gradle run and CI receipts for a shared key-helper change. Can we say all platforms were tested? Produce a concise coverage table and the smallest set of missing checks. Use only the supplied evidence and repository conventions; do not run builds or query services. Save your report in the assigned output directory.",
+      "expected_output": "A source-specific coverage report and focused follow-up verification plan.",
+      "files": [
+        "fixtures/coverage/evidence.json"
+      ],
+      "expectations": [
+        "Rejects the claim that all platforms were tested; distinguishes actual execution from successful linking, skipped tasks, and compilation.",
+        "Associates evidence with source commit 1111111111111111111111111111111111111111 and excludes the previous-commit Windows run from current runtime coverage.",
+        "Correctly identifies six local executed environments and current Linux execution for both startup and sample, with zero failures; any reported total is 166 current-source test cases.",
+        "Distinguishes Android host tests from device execution and Node tests from browser execution; does not claim iosArm64 hardware execution.",
+        "Prioritizes current-source Windows and skipped browser runtime checks, reports Apple x64 execution gaps, and does not require rerunning already-proven current Linux as a missing check."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The approved Kotlin and Gradle updates in the fixture are ready, with no public API or runtime behavior change. Prepare the next patch release plan and show the needed version/documentation changes. Also explain how to finish the hypothetical recovery scenario recorded in state.json. Treat these fictional facts as authoritative; do not query real release coordinates, change remotes, publish, or edit outside the assigned output directory.",
+      "expected_output": "A concrete patch release plan, documentation change list, and recovery procedure based on the supplied workflow and release state.",
+      "files": [
+        "fixtures/release/state.json",
+        "fixtures/release/documents.md",
+        "fixtures/release/release.yml"
+      ],
+      "expectations": [
+        "Selects new patch version 4.1.8 from 4.1.7 for the approved tooling-only changes and preserves the public API and Android/JVM consumer requirements.",
+        "Updates current artifact, README, Swift api/export, website, tooling docs, and new changelog entry while preserving historical migration coordinates and existing changelog entries.",
+        "Preserves the existing v4.1.8 tag at commit 8888888888888888888888888888888888888888 and treats the published Maven Central coordinates as immutable.",
+        "Provides a recovery dispatch for version 4.1.8 at the existing tag with maven-central=false, finishing GitHub Packages and the GitHub release without reuploading Central.",
+        "Distinguishes hypothetical plans from completed publication and calls for independent artifact/metadata, GitHub, website/wiki verification without pretending to have queried or published anything."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "An initializer that installs its feature manifest inside create fails with the self-cycle shown in the supplied older runtime snapshot. Prepare an OpenSpec change and implementation/verification plan. Keep the public Kotlin and Swift API unchanged, preserve caching and real cycle detection, and explain any consequence for an earlier failed install. Work from the fixture sources, not current production code. Do not implement, build, tag, or publish; save the proposed artifacts in the assigned output directory.",
+      "expected_output": "An OpenSpec proposal with behavioral scenarios, compatibility reasoning, implementation tasks, and appropriate verification.",
+      "files": [
+        "fixtures/planning/README.md",
+        "fixtures/planning/observations.json",
+        "fixtures/planning/source/StartupEngine.kt",
+        "fixtures/planning/source/StartupManifest.kt",
+        "fixtures/planning/source/common/Startup.kt",
+        "fixtures/planning/source/android/Startup.kt"
+      ],
+      "expectations": [
+        "Locates the false self-cycle in planning over cumulative manifest.eagerComponents during nested install and proposes using roots from the incoming manifest while preserving accumulated registrations.",
+        "Provides an OpenSpec proposal, observable requirement scenarios, implementation tasks and verification, rather than only a generic advice paragraph.",
+        "Preserves successful-product caching and real dependency/creation-cycle detection, with regression scenarios covering nested installation and genuine cycles.",
+        "Explicitly describes that unrelated later installations stop implicitly retrying eager components from earlier failed installs, and identifies an explicit retry route.",
+        "Preserves public Kotlin/Swift signatures and Android AndroidX delegation; scopes fixture-based analysis and planned tests honestly without claiming implementation or execution."
+      ]
+    }
+  ]
+}

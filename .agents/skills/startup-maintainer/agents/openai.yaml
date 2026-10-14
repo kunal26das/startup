@@ -1,0 +1,6 @@
+interface:
+  display_name: "Startup Maintainer"
+  short_description: "Plan, verify, and release Startup changes"
+  default_prompt: "Use $startup-maintainer to handle this Startup maintenance task with focused checks and source-specific evidence."
+policy:
+  allow_implicit_invocation: true

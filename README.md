@@ -273,6 +273,7 @@ library's `StartupException`. See [diagnostics](docs/runtime.md#diagnostics) for
 | Upgrade an existing application | [Migration guide](docs/migration.md) and [changelog](CHANGELOG.md) |
 | Run an example on my platform | [Sample app](sample/README.md) |
 | Build, test, or contribute to this repository | [Contributing](CONTRIBUTING.md) |
+| Plan changes or maintain project agent skills | [Agent workflows](docs/agent-workflows.md) |
 
 ## License
 

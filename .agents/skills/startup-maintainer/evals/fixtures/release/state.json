@@ -1,0 +1,44 @@
+{
+  "fixture": "fictional release scenario; authoritative facts for this evaluation only",
+  "latest_release": {
+    "version": "4.1.7",
+    "tag": "v4.1.7",
+    "published": true
+  },
+  "approved_changes": [
+    {
+      "dependency": "Kotlin",
+      "from": "2.4.20",
+      "to": "2.4.21"
+    },
+    {
+      "dependency": "Gradle wrapper",
+      "from": "9.8.0",
+      "to": "9.8.1"
+    }
+  ],
+  "review": {
+    "public_api_change": false,
+    "runtime_behavior_change": false,
+    "android_jvm_requirement_change": false,
+    "tests": "passed at the proposed source"
+  },
+  "initial_coordinate_check": {
+    "version": "4.1.8",
+    "tag_exists": false,
+    "central_exists": false,
+    "github_release_exists": false
+  },
+  "proposed_source": "8888888888888888888888888888888888888888",
+  "recovery_scenario": {
+    "version": "4.1.8",
+    "source_commit": "8888888888888888888888888888888888888888",
+    "tag": "v4.1.8",
+    "tag_source_commit": "8888888888888888888888888888888888888888",
+    "central_deployment": "PUBLISHED",
+    "central_public_artifacts": "all intended publications HTTP 200 and checksum verified",
+    "github_packages_step": "failed after Central success",
+    "github_release_step": "not run",
+    "source_changes_since_tag": false
+  }
+}

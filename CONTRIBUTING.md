@@ -112,6 +112,11 @@ commands you ran and note platforms you could not execute. Reports are under eac
 
 ## Prepare a contribution
 
+For meaningful behavior, API, or architecture changes, use the [agent workflow guide](docs/agent-workflows.md)
+to capture requirements and verification with OpenSpec. It also covers the project skills, pinned
+Node tooling, and skill evaluations. Small corrections and routine version bumps can proceed directly;
+the workflow adds no approval step to work the user already authorized.
+
 - Add a regression test for a behavior fix, exercising the failure and the intended result. Prefer
   tests of observable behavior over tests that mirror implementation details.
 - Put portable tests in the shared test source set that can run them; keep thread-dependent tests
