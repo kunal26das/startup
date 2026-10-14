@@ -10,7 +10,7 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-val artifactVersion = "4.0.3"
+val artifactVersion = "4.0.4"
 val androidMinSdk = 21
 val androidMinCompileSdk = 34
 val androidAar = layout.buildDirectory.file("outputs/aar/startup.aar")

@@ -20,7 +20,7 @@ Add the dependency to your shared module's `build.gradle.kts`:
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.kunal26das:startup:4.0.3")
+            implementation("io.github.kunal26das:startup:4.0.4")
         }
     }
 }
@@ -32,7 +32,7 @@ Use `api` plus framework `export(...)` when Swift needs these types; follow the
 
 | Requirement | Value |
 | --- | --- |
-| Kotlin compiler | 2.4 or newer; this repository builds with 2.4.20 |
+| Kotlin compiler | 2.4 or newer; this repository builds with 2.4.21 |
 | JVM bytecode target | 11 or newer, including Android consumers |
 | Android devices | API 21 or newer |
 | Android compile SDK | 34 or newer |
@@ -41,7 +41,7 @@ The Android artifact exposes `androidx.startup:startup-runtime` as an API depend
 two Android floors that dependency does: **`minSdk` 21** and **`minCompileSdk` 34**.
 The build checks these values against both AARs and the documentation.
 
-Dependency examples use **4.0.3**. See the [changelog](CHANGELOG.md) for fixes and the
+Dependency examples use **4.0.4**. See the [changelog](CHANGELOG.md) for fixes and the
 [migration guide](docs/migration.md) for behavior changes when upgrading.
 
 ## Quick start

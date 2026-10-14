@@ -15,8 +15,8 @@ The repository currently uses:
 | Tool | Version | Setup |
 | --- | --- | --- |
 | JDK | 21 | Install any JDK 21 distribution and set `JAVA_HOME` to it; CI uses Temurin. |
-| Gradle | 9.8.0 | Use the checked-in wrapper. |
-| Kotlin | 2.4.20 | Resolved by Gradle. |
+| Gradle | 9.8.1 | Use the checked-in wrapper. |
+| Kotlin | 2.4.21 | Resolved by Gradle. |
 | Android Gradle Plugin | 9.4.1 | Resolved by Gradle. |
 | Android SDK platform | 37 | Install it and Platform-Tools through the Android SDK Manager. |
 

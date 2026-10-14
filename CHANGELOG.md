@@ -3,6 +3,17 @@
 Migration instructions are in the [migration guide](docs/migration.md). Dependency coordinates are
 in the [installation guide](README.md#installation).
 
+## 4.0.4 — 2026-10-14
+
+The public Kotlin and Swift APIs, startup behavior, and Android/JVM requirements are unchanged
+from 4.0.3. No application API migration is required.
+
+### Changed
+
+- Build the library and sample with Kotlin 2.4.21 instead of 2.4.20.
+- Update the Gradle wrapper from 9.8.0 to 9.8.1, including the upstream wrapper JAR.
+- Update installation examples and the contributor setup guide for this release.
+
 ## 4.0.3 — 2026-10-09
 
 The public Kotlin and Swift APIs, startup behavior, and consumer requirements are unchanged from
