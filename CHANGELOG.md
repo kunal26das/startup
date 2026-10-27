@@ -3,6 +3,19 @@
 Migration instructions are in the [migration guide](docs/migration.md). Dependency coordinates are
 in the [installation guide](README.md#installation).
 
+## 4.0.5 — 2026-10-27
+
+The public Kotlin and Swift APIs, startup behavior, and Android/JVM requirements are unchanged
+from 4.0.4. No application API migration is required.
+
+### Changed
+
+- Update the Gradle wrapper from 9.8.1 to 9.8.2.
+- Add reproducible OpenSpec workflows, project maintenance skills, and cross-platform checks for
+  development tooling.
+- Update the Python setup action used by the development-tooling checks.
+- Update installation examples and the project website for this release.
+
 ## 4.0.4 — 2026-10-14
 
 The public Kotlin and Swift APIs, startup behavior, and Android/JVM requirements are unchanged
